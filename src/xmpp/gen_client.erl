@@ -11,7 +11,7 @@
 -behaviour(gen_server).
 
 % API
--export([start/7, stop/1]).
+-export([start/6, start/7, start/8, stop/1]).
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 				 terminate/2, code_change/3]).
@@ -55,10 +55,18 @@ behaviour_info(_Other) -> undefined.
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
+
+start(Account, Domain, Resource, Host, Port, Password, Module, Args) ->
+		start(exmpp_jid:make(Account, Domain, Resource), Host, Port, Password, Module, Args).
+
 start(Account, Domain, Host, Port, Password, Module, Args) ->
+		start(Account, Domain, random, Host, Port, Password, Module, Args).
+
+
+start(Jid, Host, Port, Password, Module, Args) ->
 		application:start(exmpp),
 		Session = exmpp_session:start(),
-		{ok, Client} = gen_server:start_link(?MODULE, [Account, Domain, Host, Port, Password, Module, Session], []),
+		{ok, Client} = gen_server:start_link(?MODULE, [Jid, Password, Host, Port, Module, Session], []),
 		exmpp_session:set_controlling_process(Session, Client),
 		 % Run initial script
 		 gen_server:cast(Client, {run, Args}),
@@ -132,9 +140,7 @@ stop(Client) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([Account, Domain, Host, Port, Password, Module, Session]) ->
-		{ok, H} = inet:gethostname(),
-    JID = exmpp_jid:make(Account, Domain, H),
+init([Jid, Password, Host, Port, Module, Session]) ->
     %% Create a new session with basic (digest) authentication:
     exmpp_session:auth_basic_digest(Session, JID, Password),
     %% Connect in standard TCP:
