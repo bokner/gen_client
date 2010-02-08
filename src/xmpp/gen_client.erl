@@ -60,6 +60,7 @@ behaviour_info(_Other) -> undefined.
 %%--------------------------------------------------------------------
 
 start(Account, Domain, Resource, Host, Port, Password, Module, Args) ->
+		application:start(exmpp),		
 		start(exmpp_jid:make(Account, Domain, Resource), Host, Port, Password, Module, Args).
 
 start(Account, Domain, Host, Port, Password, Module, Args) ->
@@ -67,7 +68,6 @@ start(Account, Domain, Host, Port, Password, Module, Args) ->
 
 
 start(Jid, Host, Port, Password, Module, Args) ->
-		application:start(exmpp),
 		Session = exmpp_session:start(),
 		{ok, Client} = gen_server:start_link(?MODULE, [Jid, Password, Host, Port, Module, Session], []),
 		exmpp_session:set_controlling_process(Session, Client),
