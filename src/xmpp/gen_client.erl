@@ -140,7 +140,7 @@ stop(Client) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([Jid, Password, Host, Port, Module, Session]) ->
+init([JID, Password, Host, Port, Module, Session]) ->
     %% Create a new session with basic (digest) authentication:
     exmpp_session:auth_basic_digest(Session, JID, Password),
     %% Connect in standard TCP:
