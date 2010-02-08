@@ -25,6 +25,9 @@
 
 
 -include_lib("exmpp/include/exmpp_client.hrl").
+-include_lib("exmpp/include/exmpp_nss.hrl").
+-include_lib("exmpp/include/exmpp_xml.hrl").
+-include_lib("exmpp/include/exmpp_xmpp.hrl").
 
 -include("gen_client.hrl").
 
@@ -46,7 +49,6 @@ behaviour_info(callbacks) ->
 		];
 behaviour_info(_Other) -> undefined.
 
-
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -60,14 +62,18 @@ behaviour_info(_Other) -> undefined.
 %%--------------------------------------------------------------------
 
 start(Account, Domain, Resource, Host, Port, Password, Module, Args) ->
-		application:start(exmpp),		
+		application:start(exmpp),
 		start(exmpp_jid:make(Account, Domain, Resource), Host, Port, Password, Module, Args).
 
 start(Account, Domain, Host, Port, Password, Module, Args) ->
 		start(Account, Domain, random, Host, Port, Password, Module, Args).
 
 
-start(Jid, Host, Port, Password, Module, Args) ->
+start(Jid, Host, Port, Password, Module, Args) when is_list(Jid) ->
+	application:start(exmpp),	
+	start(exmpp_jid:make(Jid), Host, Port, Password, Module, Args);
+
+start(Jid, Host, Port, Password, Module, Args) when ?IS_JID(Jid) ->		
 		Session = exmpp_session:start(),
 		{ok, Client} = gen_server:start_link(?MODULE, [Jid, Password, Host, Port, Module, Session], []),
 		exmpp_session:set_controlling_process(Session, Client),
