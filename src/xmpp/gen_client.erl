@@ -16,7 +16,10 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 				 terminate/2, code_change/3]).
 %% API
--export([login/1, send_packet/2, send_sync_packet/3, add_handler/3, add_handler/4, remove_handler/2]).
+-export([login/1, send_packet/2, 
+				 send_sync_packet/3, send_sync_packet/4, 
+				 add_handler/3, add_handler/4, 
+					remove_handler/2]).
 
 -export([behaviour_info/1]).
 
@@ -85,13 +88,35 @@ send_packet(Session, Packet) ->
 		io:format("Outgoing:~p~n", [exmpp_xml:document_to_list(Packet)]),
 		exmpp_session:send_packet(Session, Packet).
 
-%% Add "tear-off" packet handler and send packet.
-%% Tear-off handler will process response to the packet (by matching id of incoming packets).
-%% It's "tear-off" because it's used once and gets disposed immediately after calling.
 %%
-%% Returns {ok, Packet} or timeout
+%% Sends packet and waits Timeout ms for the packet matching the 
+%% Criteria to happen. If packet arrives, returns {ok, Packet};
+%% otherwise, returns timeout
+%% 
+send_sync_packet(Session, Packet, Criteria, Timeout) ->
+		Pid = self(),
+		ResponseId = utils:generate_random_string(12),
+		Callback = fun(Response) -> Pid!{ok, Response, ResponseId} end,
+		Handler = add_handler(Session, Criteria, Callback, true),
+		%% ...send the packet...
+		exmpp_session:send_packet(Session, Packet),
+		%% ...and wait for response (it should come from controlling process)
+		R = receive 
+			{ok, Response, ResponseId} -> %% we only interested in a response to our Id, 
+																					%% ignoring all others;
+				{ok, Response} %% return response and let calling module to deal with it.
+		after Timeout ->
+				remove_handler(Session, Handler),				
+				timeout
+		end,
+		R.		
+
+
+%%
+%% The default sync Criteria  is "match response and request by id".
+%% We need to know or create original id first.
+%%
 send_sync_packet(Session, Packet, Timeout) ->
-		io:format("Outgoing sync:~p~n", [exmpp_xml:document_to_list(Packet)]),
 		Id = exmpp_xml:get_attribute(Packet, id, none),
     {P, PacketId} = case Id of
 			none ->
@@ -101,22 +126,13 @@ send_sync_packet(Session, Packet, Timeout) ->
 			_Id ->
 				{Packet, Id}	
 		end,
-		%% We now register id handler for the receiver process to send us back response to the packet...
-		Pid = self(),
-		Callback = fun(Response) -> Pid!{ok, {PacketId, Response}} end,
-		Handler = create_id_handler(PacketId, Session, Callback),
-		%% ...send the packet...
-		exmpp_session:send_packet(Session, P),
-		%% ...and wait for response (it should come from controlling process)
-		R = receive 
-			{ok, {PacketId, ResponsePacket}} -> %% we only interested in a response to our Id, 
-																					%% ignoring all others;
-				{ok, ResponsePacket} %% return response and let calling module to deal with it.
-		after Timeout ->
-				remove_handler(Session, Handler),				
-				timeout
-		end,
-		R.		
+		%% "Matching id" criteria
+		Criteria = fun(#received_packet{id = P_Id}) -> exmpp_utils:any_to_list(P_Id) =:=
+																											 exmpp_utils:any_to_list(PacketId)
+							 end,
+		%% We have all parts, call generic send_sync now...
+		send_sync_packet(Session, P, Criteria, Timeout).
+		
 
 
 
@@ -335,13 +351,6 @@ get_receiver_process(Session) ->
   _, _, _, _, _, _, _} = 
 	utils:get_process_state(Session),
   Receiver.
-
-create_id_handler(PacketId, Session, Fun) ->
-
-		Criteria = fun(#received_packet{id = P_Id}) -> exmpp_utils:any_to_list(P_Id) =:=
-																											 exmpp_utils:any_to_list(PacketId)
-							 end,
-		add_handler(Session, Criteria, Fun, true).
 
 add_handler(Session, Criteria, Callback) ->
 	add_handler(Session, Criteria, Callback, false).
