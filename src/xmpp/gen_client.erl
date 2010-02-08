@@ -16,7 +16,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 				 terminate/2, code_change/3]).
 %% API
--export([login/1, send_packet/2, send_sync_packet/3]).
+-export([login/1, send_packet/2, send_sync_packet/3, add_handler/3, add_handler/4, remove_handler/2]).
 
 -export([behaviour_info/1]).
 
