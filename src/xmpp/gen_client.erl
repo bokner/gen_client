@@ -188,12 +188,12 @@ init([JID, Password, Host, Port, Module, Session]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_call({add_handler, Handler},  _From, #client_state{handlers = Handlers} = State) ->
+		{reply,  ok, State#client_state{handlers = sets:add_element(Handler, Handlers)}};
 
-handle_call({add_handler, Handler}, _From, #client_state{handlers = Handlers} = State) ->
-		{reply, ok, State#client_state{handlers = sets:add_element(Handler, Handlers)}};
+handle_call({remove_handler, HandlerKey},  _From, #client_state{handlers = Handlers} = State) ->
+		{reply,  ok, State#client_state{handlers = sets:del_element(HandlerKey, Handlers)}};
 
-handle_call({remove_handler, Handler}, _From, #client_state{handlers = Handlers} = State) ->
-		{reply, ok, State#client_state{handlers = sets:del_element(Handler, Handlers)}};
 
 
 handle_call(_Request, _From, State) ->
@@ -226,11 +226,7 @@ handle_cast({feed, Feed}, #client_state{module = Module} = State) ->
 		spawn(Module, handle_feed, [Feed, State]),
 		{noreply, State};
 
-%% handle_cast({create_id_handler, {PacketId, Fun}}, #client_state{id_handlers = IdHandlers} = State) ->
-%% 		{noreply, State#client_state{id_handlers = dict:store(PacketId, Fun, IdHandlers)}};
-%% 
-%% handle_cast({remove_id_handler, PacketId}, #client_state{id_handlers = IdHandlers} = State) ->
-%% 		{noreply, State#client_state{id_handlers = dict:erase(PacketId, IdHandlers)}};
+
 
 handle_cast(_Request, State) ->
 		{noreply, State}.
@@ -252,10 +248,10 @@ handle_info(Received,
 						#client_state{handlers = Handlers} = State) ->
 	%% Dynamic handlers	
 	PermanentHandlers = sets:filter(
-		fun({Criteria, Fun, TearOff}) ->
+		fun({_Key, Criteria, Fun, TearOff}) ->
 			case apply(Criteria, [Received]) of
 					true ->
-						apply(Fun, [Received]),
+						spawn(fun() -> apply(Fun, [Received]) end),
 						not TearOff;  %% Filtering out tear-off handlers after they were called
 					false ->
 						true   %% leave handlers that didn't get called
@@ -281,7 +277,7 @@ handle_info2(#received_packet{packet_type = presence,
                                  from = From,
                                  id = Id,
                                  raw_packet = Packet}, State) ->
-				%%io:format("Incoming: ~p~n", [Packet]),
+				io:format("Incoming presence: ~p~n", [Packet]),
 
 		M = State#client_state.module,
 		spawn(M, handle_presence, [Type, From, Id, Packet, State]),
@@ -363,9 +359,13 @@ add_handler(Session, Criteria, Callback) ->
 
 add_handler(Session, Criteria, Callback, TearOff) ->
 		Receiver = get_receiver_process(Session),
-		gen_server:call(Receiver, {add_handler, {Criteria, Callback, TearOff}}).
+		HandlerKey = utils:generate_random_string(12),
+		gen_server:call(Receiver, {add_handler, {HandlerKey, Criteria, Callback, TearOff}}),
+		HandlerKey.
+		
 
-remove_handler(Session, Handler) ->
+remove_handler(Session, HandlerKey) ->
 		Receiver = get_receiver_process(Session),
-		gen_server:call(Receiver, {remove_handler, Handler}).
+		gen_server:call(Receiver, {remove_handler, HandlerKey}),
+		HandlerKey.
 		
