@@ -61,10 +61,10 @@ unsubscribe_temporary(Session, PubSub, Jid, Node, _Subid) ->
 										 {Acc, Domain, Resource} = FullJid,										
 										 case exmpp_jid:parse(Jid) of
 											 {jid, Jid, Acc, Domain, Resource} ->
-												 io:format("probe match for ~p~n", [FullJid]),
+												 io:format("probe matches for ~p~n", [FullJid]),
 												 true;
 											 _NoMatch ->
-												 io:format("probe not match for ~p~, ~p~n", [Jid, FullJid]),
+												 io:format("probe doesn't match for ~p, ~p~n", [Jid, FullJid]),
 												 false
 										 end;
 								 (_NonPresence) ->
