@@ -20,18 +20,18 @@
 tidy_subscriptions(Jid, Password, Host, Port, PubSub) ->
 	{ok, Session, _C} = gen_client:start(Jid, Host, Port, Password, dummy_client, []),
 	FullJidCondition = fun(#received_packet{packet_type = presence}) ->
-														true;
-												(_Other) ->
-														false
+													true;
+											 (_Other) ->
+												 false
 										 end,		
 	gen_client:add_handler(Session, 
 												 FullJidCondition,
 												 fun(#received_packet{from = FullJid, type_attr = "unavailable"}) ->
-																%% jid is offline, unsubscribe it from all nodes
-																io:format("~p gone offline~n", [FullJid]),
-																unsubscribe_from_all_nodes(Session, FullJid, PubSub);
-														(_Other) ->
-																void
+															%% jid is offline, unsubscribe it from all nodes
+															io:format("~p gone offline~n", [FullJid]),
+															unsubscribe_from_all_nodes(Session, FullJid, PubSub);
+													 (_Other) ->
+														 void
 												 end),
 	
 	
@@ -39,36 +39,37 @@ tidy_subscriptions(Jid, Password, Host, Port, PubSub) ->
 	
 	process_subscriptions(Session, PubSub, 
 												fun(SubscriptionList) ->
-															 lists:foreach(fun(S) -> 
-																										spawn(
-																											fun() -> unsubscribe_temporary(Session, PubSub,
-																																										 exmpp_xml:get_attribute(S, "jid", undefined),
-																																										 exmpp_xml:get_attribute(S, "node", undefined),
-																																										 exmpp_xml:get_attribute(S, "subid", undefined)
-																																										)
-																											end
-																												 )
-																						 
-																						 end, 
-																						 SubscriptionList
-																						
-																						) end),
+														 lists:foreach(fun(S) -> 
+																								spawn(
+																									fun() -> 
+																											 unsubscribe_temporary(Session, PubSub,
+																																						 exmpp_xml:get_attribute(S, "jid", undefined),
+																																						 exmpp_xml:get_attribute(S, "node", undefined),
+																																						 exmpp_xml:get_attribute(S, "subid", undefined)
+																																						)
+																									end
+																										 )
+																					 
+																					 end, 
+																					 SubscriptionList
+																					
+																					) end),
 	ok.
 
 unsubscribe_temporary(Session, PubSub, Jid, Node, _Subid) ->
 	%% Prepare handler for presence
 	Condition = fun(#received_packet{from = FullJid, packet_type = presence}) ->
-										 {Acc, Domain, Resource} = FullJid,										
-										 case exmpp_jid:parse(Jid) of
-											 {jid, Jid, Acc, Domain, Resource} ->
-												 io:format("probe matches for ~p~n", [FullJid]),
-												 true;
-											 _NoMatch ->
-												 io:format("probe doesn't match for ~p, ~p~n", [Jid, FullJid]),
-												 false
-										 end;
-								 (_NonPresence) ->
-										 false
+									 {Acc, Domain, Resource} = FullJid,										
+									 case exmpp_jid:parse(Jid) of
+										 {jid, Jid, Acc, Domain, Resource} ->
+											 io:format("probe matches for ~p~n", [FullJid]),
+											 true;
+										 _NoMatch ->
+											 io:format("probe doesn't match for ~p, ~p~n", [Jid, FullJid]),
+											 false
+									 end;
+								(_NonPresence) ->
+									false
 							end, 
 	%% Send presence probe
 	ProbeResult = gen_client:send_sync_packet(Session, exmpp_stanza:set_recipient(
@@ -95,23 +96,24 @@ unsubscribe_from_all_nodes(Session, {Acc, Domain, Resource} = Jid, PubSub) ->
 	io:format("Unsubscribing ~p~n", [Jid]),
 	process_subscriptions(Session, PubSub, 
 												fun(SList) ->
-															 lists:foreach(fun(S) -> 
-																										spawn(
-																											fun() -> JidAttr = exmpp_xml:get_attribute(S, "jid", undefined),
-																															 case JidAttr == exmpp_jid:to_binary(Acc, Domain, Resource) of
-																																 true ->
-																																	 unsubscribe_from_node(Session, JidAttr, exmpp_xml:get_attribute(S, "node", undefined), PubSub);
-																																 false ->
-																																	 void
-																															 end
-																											
-																											end
-																												 )
-																						 
-																						 end, 
-																						 SList
-																						
-																						) end								
+														 lists:foreach(fun(S) -> 
+																								spawn(
+																									fun() -> 
+																											 JidAttr = exmpp_xml:get_attribute(S, "jid", undefined),
+																											 case JidAttr == exmpp_jid:to_binary(Acc, Domain, Resource) of
+																												 true ->
+																													 unsubscribe_from_node(Session, JidAttr, exmpp_xml:get_attribute(S, "node", undefined), PubSub);
+																												 false ->
+																													 void
+																											 end
+																									
+																									end
+																										 )
+																					 
+																					 end, 
+																					 SList
+																					
+																					) end								
 											 ),
 	ok.
 

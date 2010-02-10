@@ -22,28 +22,28 @@
 %% gen_client API callbacks
 
 run(State, []) ->
-		Session = State#client_state.session,
-		gen_client:login(Session),
-		gen_client:send_packet(Session, stanza:available("vRoc server is open for business")),
-
+	Session = State#client_state.session,
+	gen_client:login(Session),
+	gen_client:send_packet(Session, stanza:available("Available.")),
+	
 	io:format("Dummy client has started."),
-		{ok, dummy_state}.
+	{ok, dummy_state}.
 
 terminate(State) ->
-				Session = State#client_state.session,
-				gen_client:send_packet(Session, stanza:unavailable()),
-				io:format("Dummy client has finished."),
-		ok.
+	Session = State#client_state.session,
+	gen_client:send_packet(Session, stanza:unavailable()),
+	io:format("Dummy client has finished."),
+	ok.
 
 handle_iq(_Type, _From, _Id, _IQ, State) ->
-		{ok, State#client_state.module_state}.
+	{ok, State#client_state.module_state}.
 
 
 handle_presence(_Type, _From, _Id, _Packet, State) ->
-		{ok, State#client_state.module_state}.
+	{ok, State#client_state.module_state}.
 
 
 
 handle_message(_Type, _From, _Id, _Packet, State) ->
-		{ok, State#client_state.module_state}.
+	{ok, State#client_state.module_state}.
 
