@@ -1,0 +1,17 @@
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/xmpp_platform/!svn/ver/33/trunk/common/src/xmpp/commands
+END
+env_info_command.erl
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/xmpp_platform/!svn/ver/33/trunk/common/src/xmpp/commands/env_info_command.erl
+END
+shell_command.erl
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/xmpp_platform/!svn/ver/53/trunk/common/src/xmpp/commands/shell_command.erl
+END

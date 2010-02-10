@@ -35,7 +35,7 @@ terminate(State) ->
 				io:format("Dummy client has finished."),
 		ok.
 
-handle_iq(_Type, _From, _Id, IQ, State) ->
+handle_iq(_Type, _From, _Id, _IQ, State) ->
 		{ok, State#client_state.module_state}.
 
 
