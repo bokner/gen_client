@@ -37,23 +37,24 @@ tidy_subscriptions(Jid, Password, Host, Port, PubSub) ->
 	
 	%% Get subscriptions
 	
-	process_subscriptions(Session, PubSub, 
-												fun(SubscriptionList) ->
-														 lists:foreach(fun(S) -> 
-																								spawn(
-																									fun() -> 
-																											 unsubscribe_temporary(Session, PubSub,
-																																						 exmpp_xml:get_attribute(S, "jid", undefined),
-																																						 exmpp_xml:get_attribute(S, "node", undefined),
-																																						 exmpp_xml:get_attribute(S, "subid", undefined)
-																																						)
-																									end
-																										 )
-																					 
-																					 end, 
-																					 SubscriptionList
-																					
-																					) end),
+	process_subscriptions(
+		Session, PubSub, 
+		fun(SubscriptionList) ->
+				 lists:foreach(fun(S) -> 
+														spawn(
+															fun() -> 
+																	 unsubscribe_temporary(Session, PubSub,
+																												 exmpp_xml:get_attribute(S, "jid", undefined),
+																												 exmpp_xml:get_attribute(S, "node", undefined),
+																												 exmpp_xml:get_attribute(S, "subid", undefined)
+																												)
+															end
+																 )
+											 
+											 end, 
+											 SubscriptionList
+											
+											) end),
 	ok.
 
 unsubscribe_temporary(Session, PubSub, Jid, Node, _Subid) ->
@@ -94,7 +95,8 @@ unsubscribe_from_node(Session, Jid, Node, PubSub) ->
 
 unsubscribe_from_all_nodes(Session, {Acc, Domain, Resource} = Jid, PubSub) ->
 	io:format("Unsubscribing ~p~n", [Jid]),
-	process_subscriptions(Session, PubSub, 
+	process_subscriptions(
+		Session, PubSub, 
 												fun(SList) ->
 														 lists:foreach(fun(S) -> 
 																								spawn(
