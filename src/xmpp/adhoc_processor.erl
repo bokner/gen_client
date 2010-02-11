@@ -22,7 +22,7 @@
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
--include("gen_client.hrl").
+-include("include/gen_client.hrl").
 
 -record(p_state, {client_session, client_module, commands, command_sessions = dict:new()}).
 

@@ -8,7 +8,7 @@
 %% Include files
 %%
 -include_lib("exmpp/include/exmpp_client.hrl").
--include("gen_client.hrl").
+-include("include/gen_client.hrl").
 %%
 %% Exported Functions
 %%
@@ -97,25 +97,25 @@ unsubscribe_from_all_nodes(Session, {Acc, Domain, Resource} = Jid, PubSub) ->
 	io:format("Unsubscribing ~p~n", [Jid]),
 	process_subscriptions(
 		Session, PubSub, 
-												fun(SList) ->
-														 lists:foreach(fun(S) -> 
-																								spawn(
-																									fun() -> 
-																											 JidAttr = exmpp_xml:get_attribute(S, "jid", undefined),
-																											 case JidAttr == exmpp_jid:to_binary(Acc, Domain, Resource) of
-																												 true ->
-																													 unsubscribe_from_node(Session, JidAttr, exmpp_xml:get_attribute(S, "node", undefined), PubSub);
-																												 false ->
-																													 void
-																											 end
-																									
-																									end
-																										 )
-																					 
-																					 end, 
-																					 SList
-																					
-																					) end								
+		fun(SList) ->
+				 lists:foreach(fun(S) -> 
+														spawn(
+															fun() -> 
+																	 JidAttr = exmpp_xml:get_attribute(S, "jid", undefined),
+																	 case JidAttr == exmpp_jid:to_binary(Acc, Domain, Resource) of
+																		 true ->
+																			 unsubscribe_from_node(Session, JidAttr, exmpp_xml:get_attribute(S, "node", undefined), PubSub);
+																		 false ->
+																			 void
+																	 end
+															
+															end
+																 )
+											 
+											 end, 
+											 SList
+											
+											) end								
 											 ),
 	ok.
 

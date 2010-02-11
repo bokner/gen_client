@@ -23,7 +23,8 @@
 				 subscribe/1, subscribed/1,
 				 publish_with_itemid/4,
 				 discover_pubsub_nodes/2,
-				 retrieve_pubsub_item/3
+				 retrieve_pubsub_item/3,
+				 get_pubsub_subscriptions/1
 				]).
 %%
 %% API Functions
@@ -177,6 +178,20 @@ add_user(Jid, Password) when ?IS_JID(Jid) ->
 	</iq>", [Domain, JidStr, Password, Password])),
 		Packet.
 
+get_pubsub_subscriptions(PubSub) ->
+		#xmlel{name ='iq', 									 
+										attrs = [
+																		#xmlattr{name = 'type', value = <<"get">>},
+																		#xmlattr{name = 'to', value = list_to_binary(PubSub)}
+														],
+		  children = [
+									#xmlel{name = 'pubsub',
+												 ns = ?NS_PUBSUB,
+												 children = [
+																		 #xmlel{name = 'subscriptions'}
+																		 ]
+												 }
+									]}.
 
 
 %%

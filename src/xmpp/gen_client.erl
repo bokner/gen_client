@@ -29,7 +29,8 @@
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
--include("gen_client.hrl").
+-include("include/gen_client.hrl").
+
 
 -define(PUBSUB(NS, Children), (
   #xmlel{ns = NS, name = 'pubsub', children = Children}
@@ -44,8 +45,8 @@ behaviour_info(callbacks) ->
 		 {terminate, 1},
 		 {handle_iq, 5},
 		 {handle_message, 5},
-		 {handle_presence, 5},
-		 {handle_feed, 2}
+		 {handle_presence, 5}
+
 		];
 behaviour_info(_Other) -> undefined.
 
@@ -219,13 +220,6 @@ handle_cast(stop, #client_state{session = Session, module = Module} = State) ->
 		exmpp_session:stop(Session),
 		spawn(Module, terminate, [State]),
 		{stop, normal, State};
-
-
-handle_cast({feed, Feed}, #client_state{module = Module} = State) ->
-
-		spawn(Module, handle_feed, [Feed, State]),
-		{noreply, State};
-
 
 
 handle_cast(_Request, State) ->

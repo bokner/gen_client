@@ -19,7 +19,7 @@
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
--include("gen_client.hrl").
+-include("include/gen_client.hrl").
 % disco_client behaviour
 % Return a list of required functions and their arity.
 %
