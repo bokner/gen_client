@@ -1,0 +1,7 @@
+Prerequisites: 
+	erlang 12.5 and higher;
+	exmpp
+	
+To build from source, checkout and do:
+
+erl -make
