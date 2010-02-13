@@ -10,7 +10,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/1, execute/5, generate_sessionid/1, cancel/3, command_items/2]).
+-export([start_link/2, execute/5, generate_sessionid/1, cancel/3, command_items/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -22,9 +22,9 @@
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
--include("include/gen_client.hrl").
+-include("gen_client.hrl").
 
--record(p_state, {client_session, client_module, commands, command_sessions = dict:new()}).
+-record(p_state, {adhoc_module, commands, command_sessions = dict:new()}).
 
 %%%===================================================================
 %%% API
@@ -37,8 +37,8 @@
 %% @spec start_link(Session, Commands) -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(State) ->
-		gen_server:start_link(?MODULE, [State], []).
+start_link(State, AdhocModule) ->
+		gen_server:start_link(?MODULE, [State, AdhocModule], []).
 
 execute(Processor, Command, CommandSession, DataForm, Args) ->
 		Sessionid = case is_binary(CommandSession) of
@@ -84,11 +84,11 @@ generate_sessionid(Command) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([#client_state{session = Session, module = Module} = State]) ->
-		{ok, #p_state{client_session = Session,
-									client_module = Module,
+init([State, AdhocModule]) ->
+		{ok, #p_state{
+									adhoc_module = AdhocModule,
 								commands = lists:foldl(fun(#command{id = Id} = C, D) -> dict:store(Id, C, D)
-																			 end, dict:new(), Module:get_adhoc_list(State))
+																			 end, dict:new(), AdhocModule:get_adhoc_list(State))
 								 }
 		}.
 

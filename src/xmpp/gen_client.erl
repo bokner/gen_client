@@ -18,8 +18,8 @@
 %% API
 -export([login/1, send_packet/2, 
 				 send_sync_packet/3, send_sync_packet/4, 
-				 add_handler/3, add_handler/4, 
-					remove_handler/2]).
+				 add_handler/2, 
+				 remove_handler/2]).
 
 -export([behaviour_info/1]).
 
@@ -29,25 +29,21 @@
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
--include("include/gen_client.hrl").
+-include("gen_client.hrl").
 
-
--define(PUBSUB(NS, Children), (
-  #xmlel{ns = NS, name = 'pubsub', children = Children}
-)).
 
 
 % gen_client behaviour
 % Return a list of required functions and their arity
 behaviour_info(callbacks) ->
-		[
-		 {run, 2},
-		 {terminate, 1},
-		 {handle_iq, 5},
-		 {handle_message, 5},
-		 {handle_presence, 5}
-
-		];
+	[
+	 {run, 2},
+	 {terminate, 1},
+	 {handle_iq, 6},
+	 {handle_message, 5},
+	 {handle_presence, 5}
+	
+	];
 behaviour_info(_Other) -> undefined.
 
 %%%===================================================================
@@ -63,11 +59,11 @@ behaviour_info(_Other) -> undefined.
 %%--------------------------------------------------------------------
 
 start(Account, Domain, Resource, Host, Port, Password, Module, Args) ->
-		application:start(exmpp),
-		start(exmpp_jid:make(Account, Domain, Resource), Host, Port, Password, Module, Args).
+	application:start(exmpp),
+	start(exmpp_jid:make(Account, Domain, Resource), Host, Port, Password, Module, Args).
 
 start(Account, Domain, Host, Port, Password, Module, Args) ->
-		start(Account, Domain, random, Host, Port, Password, Module, Args).
+	start(Account, Domain, random, Host, Port, Password, Module, Args).
 
 
 start(Jid, Host, Port, Password, Module, Args) when is_list(Jid) ->
@@ -75,77 +71,85 @@ start(Jid, Host, Port, Password, Module, Args) when is_list(Jid) ->
 	start(exmpp_jid:make(Jid), Host, Port, Password, Module, Args);
 
 start(Jid, Host, Port, Password, Module, Args) when ?IS_JID(Jid) ->		
-		Session = exmpp_session:start(),
-		{ok, Client} = gen_server:start_link(?MODULE, [Jid, Password, Host, Port, Module, Session], []),
-		exmpp_session:set_controlling_process(Session, Client),
-		 % Run initial script
-		 gen_server:cast(Client, {run, Args}),
-		{ok, Session, Client}.
+	Session = exmpp_session:start(),
+	{ok, Client} = gen_server:start_link(?MODULE, [Jid, Password, Host, Port, Module, Session], []),
+	exmpp_session:set_controlling_process(Session, Client),
+	% Run initial script
+	gen_server:cast(Client, {run, Args}),
+	{ok, Session, Client}.
 
 login(Session) ->
-		try exmpp_session:login(Session)
-		catch
-				throw:T ->
-						T
-		end.
+	try exmpp_session:login(Session)
+	catch
+		throw:T ->
+			T
+	end.
 
 
 %% Send packet asynchronously
 send_packet(Session, Packet) ->
-		io:format("Outgoing:~p~n", [exmpp_xml:document_to_list(Packet)]),
-		exmpp_session:send_packet(Session, Packet).
+	io:format("Outgoing:~p~n", [exmpp_xml:document_to_list(Packet)]),
+	exmpp_session:send_packet(Session, Packet).
 
 %%
 %% Sends packet and waits Timeout ms for the packet matching the 
-%% Criteria to happen. If packet arrives, returns {ok, Packet};
+%% Trigger to happen. If packet arrives, returns {ok, Packet};
 %% otherwise, returns timeout
 %% 
-send_sync_packet(Session, Packet, Criteria, Timeout) ->
-		Pid = self(),
-		ResponseId = utils:generate_random_string(12),
-		Callback = fun(Response) -> Pid!{ok, Response, ResponseId} end,
-		Handler = add_handler(Session, Criteria, Callback, true),
-		%% ...send the packet...
-		exmpp_session:send_packet(Session, Packet),
-		%% ...and wait for response (it should come from controlling process)
-		R = receive 
-			{ok, Response, ResponseId} -> %% we only interested in a response to our Id, 
-																					%% ignoring all others;
-				{ok, Response} %% return response and let calling module to deal with it.
-		after Timeout ->
-				remove_handler(Session, Handler),				
-				timeout
-		end,
-		R.		
+send_sync_packet(Session, Packet, Trigger, Timeout) ->
+	Pid = self(),
+	ResponseId = exmpp_utils:random_id("token"),
+	Callback = fun(Response, State) -> 
+									case Trigger(Response, State) of 
+										true ->
+											Pid!{ok, Response, ResponseId},
+											stop; %% Signals handler loop to dispose of this handler
+										false ->
+											ok
+									end
+						 end,
+	HandlerKey = add_handler(Session, Callback),
+	%% ...send the packet...
+	exmpp_session:send_packet(Session, Packet),
+	%% ...and wait for response (it should come from controlling process)
+	R = receive 
+				{ok, Response, ResponseId} -> %% we only interested in a response to our Id, 
+					%% ignoring all others;
+					{ok, Response} %% return response and let calling module to deal with it.
+				after Timeout ->			
+					timeout
+			end,
+	remove_handler(Session, HandlerKey),	
+	R.		
 
 
 %%
-%% The default sync Criteria  is "match response and request by id".
+%% The default sync Trigger  is "match response and request by id".
 %% We need to know or create original id first.
 %%
 send_sync_packet(Session, Packet, Timeout) ->
-		Id = exmpp_xml:get_attribute(Packet, id, none),
-    {P, PacketId} = case Id of
-			none ->
-				NewId = exmpp_utils:random_id("session"),
-	    	NewPacket = exmpp_xml:set_attribute(Packet, id, NewId),
-				{NewPacket, NewId};
-			_Id ->
-				{Packet, Id}	
-		end,
-		%% "Matching id" criteria
-		Criteria = fun(#received_packet{id = P_Id}) -> exmpp_utils:any_to_list(P_Id) =:=
-																											 exmpp_utils:any_to_list(PacketId)
-							 end,
-		%% We have all parts, call generic send_sync now...
-		send_sync_packet(Session, P, Criteria, Timeout).
-		
+	Id = exmpp_xml:get_attribute(Packet, id, none),
+	{P, PacketId} = case Id of
+										none ->
+											NewId = exmpp_utils:random_id("session"),
+											NewPacket = exmpp_xml:set_attribute(Packet, id, NewId),
+											{NewPacket, NewId};
+										_Id ->
+											{Packet, Id}	
+									end,
+	%% "Matching id" criteria
+	Trigger = fun(#received_packet{id = P_Id}, _State) -> exmpp_utils:any_to_list(P_Id) =:=
+																													exmpp_utils:any_to_list(PacketId)
+						end,
+	%% We have all parts, call generic send_sync now...
+	send_sync_packet(Session, P, Trigger, Timeout).
+
 
 
 
 
 stop(Client) ->
-		gen_server:cast(Client, stop).
+	gen_server:cast(Client, stop).
 
 
 %%%===================================================================
@@ -164,16 +168,16 @@ stop(Client) ->
 %% @end
 %%--------------------------------------------------------------------
 init([JID, Password, Host, Port, Module, Session]) ->
-    %% Create a new session with basic (digest) authentication:
-    exmpp_session:auth_basic_digest(Session, JID, Password),
-    %% Connect in standard TCP:
-    _StreamId = exmpp_session:connect_TCP(Session, Host, Port),
-    {ok, #client_state{jid = JID,
-								session = Session,
-								module = Module,
-								handlers = sets:new()
-								}
-		}.
+	%% Create a new session with basic (digest) authentication:
+	exmpp_session:auth_basic_digest(Session, JID, Password),
+	%% Connect in standard TCP:
+	_StreamId = exmpp_session:connect_TCP(Session, Host, Port),
+	{ok, #client_state{jid = JID,
+										 session = Session,
+										 module = Module,
+										 handlers = [] %%Keyed list {Key, Handler}
+										}
+	}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -190,16 +194,20 @@ init([JID, Password, Host, Port, Module, Session]) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({add_handler, Handler},  _From, #client_state{handlers = Handlers} = State) ->
-		{reply,  ok, State#client_state{handlers = sets:add_element(Handler, Handlers)}};
+
+	HandlerKey = generateHandlerKey(Handler),
+		io:format("Adding handler ~p~n", [HandlerKey]),
+	{reply,  HandlerKey, State#client_state{handlers = [{HandlerKey, Handler}| Handlers]}};
 
 handle_call({remove_handler, HandlerKey},  _From, #client_state{handlers = Handlers} = State) ->
-		{reply,  ok, State#client_state{handlers = sets:del_element(HandlerKey, Handlers)}};
+	io:format("Removing handler ~p~n", [HandlerKey]),
+	{reply,  ok, State#client_state{handlers = lists:keydelete(HandlerKey, 1, Handlers)}};
 
 
 
 handle_call(_Request, _From, State) ->
-		Reply = ok,
-		{reply, Reply, State}.
+	Reply = ok,
+	{reply, Reply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -212,18 +220,18 @@ handle_call(_Request, _From, State) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_cast({run, Args}, #client_state{module = Module} = State) ->
-
-		{ok, ModuleState} = Module:run(State, Args),
-		{noreply, State#client_state{module_state = ModuleState}};
+	
+	{ok, ModuleState} = Module:run(State, Args),
+	{noreply, State#client_state{module_state = ModuleState}};
 
 handle_cast(stop, #client_state{session = Session, module = Module} = State) ->
-		exmpp_session:stop(Session),
-		spawn(Module, terminate, [State]),
-		{stop, normal, State};
+	exmpp_session:stop(Session),
+	spawn(Module, terminate, [State]),
+	{stop, normal, State};
 
 
 handle_cast(_Request, State) ->
-		{noreply, State}.
+	{noreply, State}.
 
 
 %%--------------------------------------------------------------------
@@ -239,65 +247,72 @@ handle_cast(_Request, State) ->
 
 %% All received packets will trigger handle_info calls (because we have assigned the process to be a controlling process of session).
 handle_info(Received, 
-						#client_state{handlers = Handlers} = State) ->
+						#client_state{handlers = Handlers, session = Session} = State) ->
 	%% Dynamic handlers	
-	PermanentHandlers = sets:filter(
-		fun({_Key, Criteria, Fun, TearOff}) ->
-			case apply(Criteria, [Received]) of
-					true ->
-						spawn(fun() -> apply(Fun, [Received]) end),
-						not TearOff;  %% Filtering out tear-off handlers after they were called
-					false ->
-						true   %% leave handlers that didn't get called
-			end
+	lists:foreach(
+		fun({Key, Handler}) ->
+				 HandlerFunc = case is_function(Handler) of
+												 true ->
+													 fun() -> apply(Handler, [Received, State]) end;
+												 false when is_tuple(Handler) -> %% Handler module
+													 {HandlerModule, HandlerParams} = Handler,
+													 fun() -> apply(HandlerModule, handle, [Received, State, HandlerParams]) end
+											 end,
+				 %% from handle_info/handle_cast calls
+				 spawn(fun() -> R = HandlerFunc(), 
+												case R of
+													stop -> %% Handler has to be disposed
+														remove_handler(Session, Key);
+													_Other ->
+														void
+												end
+							 end
+							
+							) %% spawn and return result of handling along with handler key
 		end,				
 		Handlers),		
-					%% Module handlers
-					handle_info2(Received, State),
-	{noreply, State#client_state{handlers = PermanentHandlers}}.
+	%% Module handlers
+	handle_info2(Received, State),
+	{noreply, State}.
+
 
 handle_info2(#received_packet{packet_type = message,
-                                 type_attr = Type,
-                                 from = From,
-                                 id = Id,
-                                 raw_packet = Packet}, State) ->
-
-				M = State#client_state.module,
-				spawn(M, handle_message, [Type, From, Id, Packet, State]),
+															type_attr = Type,
+															from = From,
+															id = Id,
+															raw_packet = Packet}, State) ->
+	
+	M = State#client_state.module,
+	spawn(M, handle_message, [Type, From, Id, Packet, State]),
 	{noreply, State};
 
 handle_info2(#received_packet{packet_type = presence,
-                                 type_attr = Type,
-                                 from = From,
-                                 id = Id,
-                                 raw_packet = Packet}, State) ->
-				io:format("Incoming presence: ~p~n", [Packet]),
-
-		M = State#client_state.module,
-		spawn(M, handle_presence, [Type, From, Id, Packet, State]),
+															type_attr = Type,
+															from = From,
+															id = Id,
+															raw_packet = Packet}, State) ->
+	io:format("Incoming presence: ~p~n", [Packet]),
+	
+	M = State#client_state.module,
+	spawn(M, handle_presence, [Type, From, Id, Packet, State]),
 	{noreply, State};
 
-handle_info2(#received_packet{packet_type = iq,
-                                 type_attr = Type,
-                                 from = From,
-                                 id = Id,
-                                 raw_packet = Packet}, State) ->
-		io:format("Incoming: ~p~n", [exmpp_xml:document_to_list(Packet)]),
-
-		M = State#client_state.module,
-				lists:foreach(fun(Handler) ->
-														case utils:has_behaviour(M, Handler) of
-																true ->
-																	spawn(Handler, handle_iq, [Type, From, Id, exmpp_iq:xmlel_to_iq(Packet), State]);
-																false ->
-																		void
-														end
-										end, iq_handlers()), 
+handle_info2(#received_packet{ packet_type = iq,
+															 type_attr = Type,
+															 from = From,
+															 id = Id,
+															 queryns = NS,
+															 raw_packet = Packet}, State) ->
+	io:format("Incoming: ~p~n", [exmpp_xml:document_to_list(Packet)]),
+	
+	M = State#client_state.module,
+	spawn(M, handle_iq, [Type, From, Id, NS, Packet, State]),
+	
 	{noreply, State};
 
 handle_info2(_Info, State) ->
-		%%io:format("Incoming: ~p~n", [Info]),
-		{noreply, State}.
+	%%io:format("Incoming: ~p~n", [Info]),
+	{noreply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -311,7 +326,7 @@ handle_info2(_Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 terminate(_Reason, _State) ->
-		ok.
+	ok.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -322,16 +337,11 @@ terminate(_Reason, _State) ->
 %% @end
 %%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) ->
-		{ok, State}.
+	{ok, State}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%%% Defines list of known IQ handlers
-
-iq_handlers() ->
-	[disco_handler, adhoc_handler].
 
 
 %% This is a version-dependent hack in absence of
@@ -341,25 +351,35 @@ iq_handlers() ->
 %% Will review later...
 
 get_receiver_process(Session) ->
- {state, 
-	_, _, _, _, 
-	Receiver, 
-  _, _, _, _, _, _, _} = 
-	utils:get_process_state(Session),
-  Receiver.
+	{state, 
+	 _, _, _, _, 
+	 Receiver, 
+	 _, _, _, _, _, _, _} = 
+		utils:get_process_state(Session),
+	Receiver.
 
-add_handler(Session, Criteria, Callback) ->
-	add_handler(Session, Criteria, Callback, false).
+%% Module handler
+add_handler(Session, Handler) when is_atom(Handler) ->
+	case utils:has_behaviour(Handler, gen_handler) of 
+		true ->
+			add_handler2(Session, Handler);
+		false ->
+			throw({"module has to have 'handler' behaviour", Handler})
+	end;
 
-add_handler(Session, Criteria, Callback, TearOff) ->
-		Receiver = get_receiver_process(Session),
-		HandlerKey = utils:generate_random_string(12),
-		gen_server:call(Receiver, {add_handler, {HandlerKey, Criteria, Callback, TearOff}}),
-		HandlerKey.
-		
+add_handler(Session, Handler) when is_function(Handler) ->
+	add_handler2(Session, Handler).
+
+add_handler2(Session, Handler) ->
+	Receiver = get_receiver_process(Session),
+	gen_server:call(Receiver, {add_handler, Handler}).
+
+
 
 remove_handler(Session, HandlerKey) ->
-		Receiver = get_receiver_process(Session),
-		gen_server:call(Receiver, {remove_handler, HandlerKey}),
-		HandlerKey.
+	Receiver = get_receiver_process(Session),
+	gen_server:call(Receiver, {remove_handler, HandlerKey}).
+
+generateHandlerKey(Handler) ->
+	exmpp_utils:random_id("handler." ++ lists:flatten(io_lib:format("~p", [Handler]))).
 		

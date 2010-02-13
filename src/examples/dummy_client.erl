@@ -12,11 +12,11 @@
 -behaviour(gen_client).
 
 
--export([run/2, terminate/1, handle_iq/5, handle_presence/5, handle_message/5]).
+-export([run/2, terminate/1, handle_iq/6, handle_presence/5, handle_message/5]).
 
 
 
--include("include/gen_client.hrl").
+-include("gen_client.hrl").
 
 
 %% gen_client API callbacks
@@ -24,7 +24,7 @@
 run(State, []) ->
 		Session = State#client_state.session,
 		gen_client:login(Session),
-		gen_client:send_packet(Session, stanza:available("vRoc server is open for business")),
+		gen_client:send_packet(Session, stanza:available("Started.")),
 
 	io:format("Dummy client has started."),
 		{ok, dummy_state}.
@@ -35,7 +35,7 @@ terminate(State) ->
 				io:format("Dummy client has finished."),
 		ok.
 
-handle_iq(_Type, _From, _Id, IQ, State) ->
+handle_iq(_Type, _From, _Id, _NS, _IQ, State) ->
 		{ok, State#client_state.module_state}.
 
 

@@ -11,11 +11,12 @@
 
 -export([new_session_process/1, execute/3, cancel/1, to_dataform/1]).
 
--include("include/gen_client.hrl").
 
 -include_lib("exmpp/include/exmpp_nss.hrl").
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
+
+-include("gen_client.hrl").
 
 % No process is created for handling the command
 new_session_process(_Args) ->

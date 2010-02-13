@@ -1,6 +1,6 @@
 %% Author: bokner
 %% Created: Feb 3, 2010
-%% Description: Generates random numbers in a range and sends them to some jid.
+%% Description: Monitors and clears temporary pubsub subscriptions.
 -module(tidy_bot).
 
 
@@ -8,32 +8,31 @@
 %% Include files
 %%
 -include_lib("exmpp/include/exmpp_client.hrl").
--include("include/gen_client.hrl").
+-include("gen_client.hrl").
 %%
 %% Exported Functions
 %%
 -export([tidy_subscriptions/5]).
-
 %%
 %% API Functions
 %%
 tidy_subscriptions(Jid, Password, Host, Port, PubSub) ->
 	{ok, Session, _C} = gen_client:start(Jid, Host, Port, Password, dummy_client, []),
-	FullJidCondition = fun(#received_packet{packet_type = presence}) ->
-													true;
-											 (_Other) ->
-												 false
-										 end,		
-	gen_client:add_handler(Session, 
-												 FullJidCondition,
-												 fun(#received_packet{from = FullJid, type_attr = "unavailable"}) ->
-															%% jid is offline, unsubscribe it from all nodes
-															io:format("~p gone offline~n", [FullJid]),
-															unsubscribe_from_all_nodes(Session, FullJid, PubSub);
-													 (_Other) ->
-														 void
-												 end),
-	
+	JidOfflineHandler = 
+		fun(#received_packet{packet_type = presence, type_attr = "unavailable", from = PeerJid}, #client_state{jid = BotJid} = _State) when BotJid /= PeerJid ->
+				 {Node, Domain, _Resource} = PeerJid,	
+				 case exmpp_jid:bare_compare(BotJid, exmpp_jid:make(Node, Domain)) of
+					 false ->
+						 io:format("~p gone offline~n", [PeerJid]),
+						 unsubscribe_from_all_nodes(Session, PeerJid, PubSub);														
+					 _Other ->
+						 void
+				 end,
+				 ok;
+			(_Other, _Session) ->
+				ok
+		end,
+	gen_client:add_handler(Session, JidOfflineHandler),	
 	
 	%% Get subscriptions
 	
@@ -59,7 +58,7 @@ tidy_subscriptions(Jid, Password, Host, Port, PubSub) ->
 
 unsubscribe_temporary(Session, PubSub, Jid, Node, _Subid) ->
 	%% Prepare handler for presence
-	Condition = fun(#received_packet{from = FullJid, packet_type = presence}) ->
+	ProbeSuccessfull = fun(#received_packet{from = FullJid, packet_type = presence, type_attr = "available"}, _State) ->
 									 {Acc, Domain, Resource} = FullJid,										
 									 case exmpp_jid:parse(Jid) of
 										 {jid, Jid, Acc, Domain, Resource} ->
@@ -69,12 +68,14 @@ unsubscribe_temporary(Session, PubSub, Jid, Node, _Subid) ->
 											 io:format("probe doesn't match for ~p, ~p~n", [Jid, FullJid]),
 											 false
 									 end;
-								(_NonPresence) ->
+								(_NonPresence, _State) ->
 									false
 							end, 
 	%% Send presence probe
+	io:format("Sending probe to ~p:~n", [Jid]),
+	
 	ProbeResult = gen_client:send_sync_packet(Session, exmpp_stanza:set_recipient(
-																							exmpp_presence:probe(), Jid), Condition, 4000),
+																							exmpp_presence:probe(), Jid), ProbeSuccessfull, 4000),
 	io:format("result of probe for ~p:~n~p~n", [Jid, ProbeResult]),
 	case ProbeResult of 
 		{ok, #received_packet{type_attr = "unavailable"}} ->

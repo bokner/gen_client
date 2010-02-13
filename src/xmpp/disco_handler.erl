@@ -3,14 +3,12 @@
 %% Description: gen_client with disco capabilities
 -module(disco_handler).
 
--behaviour(gen_client).
+-behaviour(gen_handler).
 
 %%
 %% Exported Functions
 %%
 
-%% gen_client functions
--export([run/2, terminate/1, handle_iq/5, handle_presence/5, handle_message/5, handle_feed/2]).
 
 -export([behaviour_info/1]).
 
@@ -19,7 +17,8 @@
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
--include("include/gen_client.hrl").
+-include("gen_client.hrl").
+
 % disco_client behaviour
 % Return a list of required functions and their arity.
 %
@@ -35,52 +34,33 @@ behaviour_info(_Other) -> undefined.
 %% API Functions
 %%
 
-%% Pass-through functions; we delegate to the module everything except disco handling
-run(#client_state{module = Module} = State, Args) ->
-		Module:run(State, Args).
-
-terminate(#client_state{module = Module} = State) ->
-	Module:terminate(State).
-
-handle_message(Type, From, Id, Packet, #client_state{module = Module} = State) ->
-	Module:handle_message(Type, From, Id, Packet, #client_state{module = Module} = State).
-
-
-handle_presence(Type, From, Id, Packet, #client_state{module = Module} = State) ->
-	Module:handle_presence(Type, From, Id, Packet, #client_state{module = Module} = State).
-
-
-handle_feed(Feed, #client_state{module = Module} = State) ->
-	Module:handle_feed(Feed, #client_state{module = Module} = State).
-
-
 %% Here we handle disco
 % Disco#info
-handle_iq(_Type, {Acc, Domain, Resource} = _From, _Id, #iq{kind = request, type = get,  ns = ?NS_DISCO_INFO} = IQ, #client_state{jid = JID, module = Module, session = Session} = State) ->
+handle(#received_packet{from = From, raw_packet = IQ}, State, DiscoModule) ->
+	handle2({Acc, Domain, Resource} = From, IQ, State, DiscoModule).
+
+
+
+
+handle2({Acc, Domain, Resource} = _From, #iq{kind = request, type = get,  ns = ?NS_DISCO_INFO} = IQ, #client_state{session = Session} = State, DiscoModule) ->
 				Result = exmpp_iq:iq_to_xmlel(
-							 exmpp_iq:result(IQ, Module:disco_info(State))
+							 exmpp_iq:result(IQ, DiscoModule:disco_info(State))
 							),
 				gen_client:send_packet(Session, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
 
-		{ok, State#client_state.module_state};
+		ok;
 
 
 
 % Disco#items
-handle_iq(_Type, {Acc, Domain, Resource} = _From, _Id, #iq{kind = request, type = get,  ns = ?NS_DISCO_ITEMS, payload = undefined} = IQ, #client_state{jid = JID, module = Module, session = Session} = State) ->
+handle2({Acc, Domain, Resource} = From,  #iq{kind = request, type = get,  ns = ?NS_DISCO_ITEMS, payload = undefined} = IQ, #client_state{session = Session} = State, DiscoModule) ->
 				Result = exmpp_iq:iq_to_xmlel(
-							 exmpp_iq:result(IQ, Module:disco_items(State))
+							 exmpp_iq:result(IQ, DiscoModule:disco_items(State))
 							),
 				gen_client:send_packet(Session, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
 
-		{ok, State#client_state.module_state};
+		ok;
 
 %% Other IQ types - do nothing
-handle_iq(Type, From, Id, Packet, State) ->
-		{ok, State#client_state.module_state}.	
-
-
-%%
-%% Local Functions
-%%
-
+handle2(_From,  _IQ, _State, _DiscoModule) ->
+	ok.
