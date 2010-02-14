@@ -1,0 +1,9 @@
+#Fri Feb 12 21:03:42 EST 2010
+backend_version=R12B
+eclipse.preferences.version=1
+external_includes=
+external_modules=
+include_dirs=include
+output_dir=ebin
+source_dirs=src; src/utils; src/xmpp; src/xmpp/commands;src/examples
+use_pathz=false

@@ -21,10 +21,10 @@
 
 %% gen_client API callbacks
 
-run(State, []) ->
+run(State, [OnlineStatus]) ->
 		Session = State#client_state.session,
 		gen_client:login(Session),
-		gen_client:send_packet(Session, stanza:available("Started.")),
+		gen_client:send_packet(Session, stanza:available(OnlineStatus)),
 
 	io:format("Dummy client has started."),
 		{ok, dummy_state}.
