@@ -251,15 +251,7 @@ handle_info(Received,
 	%% Dynamic handlers	
 	lists:foreach(
 		fun({Key, Handler}) ->
-				 HandlerFunc = case is_function(Handler) of
-												 true ->
-													 fun() -> apply(Handler, [Received, State]) end;
-												 false when is_tuple(Handler) -> %% Handler module
-													 {HandlerModule, HandlerParams} = Handler,
-													 fun() -> apply(HandlerModule, handle, [Received, State, HandlerParams]) end
-											 end,
-				 %% from handle_info/handle_cast calls
-				 spawn(fun() -> R = HandlerFunc(), 
+				 spawn(fun() -> R = apply(Handler, [Received, State]), 
 												case R of
 													stop -> %% Handler has to be disposed
 														remove_handler(Session, Key);
@@ -267,7 +259,6 @@ handle_info(Received,
 														void
 												end
 							 end
-							
 							) %% spawn and return result of handling along with handler key
 		end,				
 		Handlers),		
@@ -359,18 +350,15 @@ get_receiver_process(Session) ->
 	Receiver.
 
 %% Module handler
-add_handler(Session, Handler) when is_atom(Handler) ->
+add_handler(Session, Handler, Params) when is_atom(Handler) ->
 	case utils:has_behaviour(Handler, gen_handler) of 
 		true ->
-			add_handler2(Session, Handler);
+			add_handler(Session, fun(Received, State) -> Handler:handle(Received, State, Params) end);
 		false ->
 			throw({"module has to have 'handler' behaviour", Handler})
-	end;
+	end.
 
 add_handler(Session, Handler) when is_function(Handler) ->
-	add_handler2(Session, Handler).
-
-add_handler2(Session, Handler) ->
 	Receiver = get_receiver_process(Session),
 	gen_server:call(Receiver, {add_handler, Handler}).
 
