@@ -33,7 +33,9 @@
 behaviour_info(callbacks) ->
 		[
 			{disco_items, 1}, %% state
-			{disco_info, 1}   %% state
+			{disco_items, 2}, %% state & node
+			{disco_info, 1},   %% state
+			{disco_info, 2}  %% state & node
 		];
 behaviour_info(_Other) -> undefined.
 
@@ -43,14 +45,15 @@ behaviour_info(_Other) -> undefined.
 %%
 
 %% Here we handle disco
-% Disco#info
+%% All IQ stanzas
 handle(#received_packet{from = From, packet_type = iq, raw_packet = IQ}, State, DiscoModule) ->
-	handle2({Acc, Domain, Resource} = From, exmpp_iq:xmlel_to_iq(IQ), State, DiscoModule);
+	handle2(From, exmpp_iq:xmlel_to_iq(IQ), State, DiscoModule);
 
 handle(_, _, _) ->
 	ok.
 
-handle2({Acc, Domain, Resource} = _From, #iq{kind = request, type = get,  ns = ?NS_DISCO_INFO} = IQ, #client_state{session = Session} = State, DiscoModule) ->
+%% disco#info 
+handle2({Acc, Domain, Resource} = _From, #iq{kind = request, type = get,  ns = ?NS_DISCO_INFO, payload = #xmlel{attrs = []}} = IQ, #client_state{session = Session} = State, DiscoModule) ->
 	Query = exmpp_xml:set_children(?QUERY_INFO, DiscoModule:disco_info(State)),
 				Result = 
 					exmpp_iq:iq_to_xmlel(
@@ -63,11 +66,38 @@ handle2({Acc, Domain, Resource} = _From, #iq{kind = request, type = get,  ns = ?
 
 		ok;
 
+%% disco#info with node
+handle2({Acc, Domain, Resource} = _From, #iq{kind = request, type = get,  ns = ?NS_DISCO_INFO, 
+																						 payload = #xmlel{attrs = [#xmlattr{name = 'node', value = Node}]}} = IQ, #client_state{session = Session} = State, DiscoModule) ->
+	Query = exmpp_xml:set_children(?QUERY_INFO, DiscoModule:disco_info(State, Node)),
+				Result = 
+					exmpp_iq:iq_to_xmlel(
+							 exmpp_iq:result(IQ, Query
+															 
+							)
+															),
+
+				gen_client:send_packet(Session, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
+
+		ok;
 
 
 % Disco#items
-handle2({Acc, Domain, Resource} = _From,  #iq{kind = request, type = get,  ns = ?NS_DISCO_ITEMS, payload = #xmlel{name = 'query'}} = IQ, #client_state{session = Session} = State, DiscoModule) ->
+handle2({Acc, Domain, Resource} = _From,  #iq{kind = request, type = get,  ns = ?NS_DISCO_ITEMS, payload = #xmlel{name = 'query', attrs = []}} = IQ, #client_state{session = Session} = State, DiscoModule) ->
 	Query = exmpp_xml:set_children(?QUERY_ITEMS, DiscoModule:disco_items(State)),
+				Result = 
+					exmpp_iq:iq_to_xmlel(
+							 exmpp_iq:result(IQ, Query
+															 
+							)
+															),
+					gen_client:send_packet(Session, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
+
+		ok;
+
+% Disco#items and node
+handle2({Acc, Domain, Resource} = _From,  #iq{kind = request, type = get,  ns = ?NS_DISCO_ITEMS, payload = #xmlel{name = 'query', attrs = [#xmlattr{name = 'node', value = Node}]}} = IQ, #client_state{session = Session} = State, DiscoModule) ->
+	Query = exmpp_xml:set_children(?QUERY_ITEMS, DiscoModule:disco_items(State, Node)),
 				Result = 
 					exmpp_iq:iq_to_xmlel(
 							 exmpp_iq:result(IQ, Query
