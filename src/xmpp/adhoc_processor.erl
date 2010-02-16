@@ -33,12 +33,12 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the adhoc processor
-%% State is a client session state (see state record in gen_client.hrl).
+%% 
 %% @spec start_link(Session, Commands) -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(State, AdhocModule) ->
-		gen_server:start_link(?MODULE, [State, AdhocModule], []).
+start_link(ClientSession, AdhocModule) ->
+		gen_server:start_link(?MODULE, [ClientSession, AdhocModule], []).
 
 execute(Processor, Command, CommandSession, DataForm, Args) ->
 		Sessionid = case is_binary(CommandSession) of
@@ -84,11 +84,11 @@ generate_sessionid(Command) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([State, AdhocModule]) ->
+init([ClientSession, AdhocModule]) ->
 		{ok, #p_state{
 									adhoc_module = AdhocModule,
-								commands = lists:foldl(fun(#command{id = Id} = C, D) -> dict:store(Id, C, D)
-																			 end, dict:new(), AdhocModule:get_adhoc_list(State))
+									commands = lists:foldl(fun(#command{id = Id} = C, D) -> dict:store(Id, C, D)
+																			 end, dict:new(), AdhocModule:get_adhoc_list(ClientSession))
 								 }
 		}.
 

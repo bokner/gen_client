@@ -41,8 +41,11 @@ behaviour_info(_Other) -> undefined.
 %% Here we handle adhoc commands
 %%
 %% Adhoc Command Execution
-handle(#received_packet{from = From, raw_packet = IQ}, State, DiscoModule) ->
-	handle2({Acc, Domain, Resource} = From, IQ, State, DiscoModule).
+handle(#received_packet{from = From, packet_type = iq, raw_packet = IQ}, State, AdhocModule) ->
+	handle2({Acc, Domain, Resource} = From, exmpp_iq:xmlel_to_iq(IQ), State, AdhocModule);
+
+handle(_, _, _) ->
+	ok.
 
 
 handle2({Acc, Domain, Resource}, 

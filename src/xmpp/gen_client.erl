@@ -18,8 +18,11 @@
 %% API
 -export([login/1, send_packet/2, 
 				 send_sync_packet/3, send_sync_packet/4, 
-				 add_handler/2, 
+				 add_handler/2, add_handler/3,
 				 remove_handler/2]).
+
+%% 
+-export([get_client_state/1]).
 
 -export([behaviour_info/1]).
 
@@ -75,7 +78,9 @@ start(Jid, Host, Port, Password, Module, Args) when ?IS_JID(Jid) ->
 	{ok, Client} = gen_server:start_link(?MODULE, [Jid, Password, Host, Port, Module, Session], []),
 	exmpp_session:set_controlling_process(Session, Client),
 	% Run initial script
-	gen_server:cast(Client, {run, Args}),
+	%gen_server:cast(Client, {run, Args}),
+		{ok, ModuleState} = Module:run(Session, Args),
+		gen_server:cast(Client, {set_module_state, ModuleState}),
 	{ok, Session, Client}.
 
 login(Session) ->
@@ -203,7 +208,8 @@ handle_call({remove_handler, HandlerKey},  _From, #client_state{handlers = Handl
 	io:format("Removing handler ~p~n", [HandlerKey]),
 	{reply,  ok, State#client_state{handlers = lists:keydelete(HandlerKey, 1, Handlers)}};
 
-
+handle_call(get_client_state, _From, State) ->
+	{reply, State, State};
 
 handle_call(_Request, _From, State) ->
 	Reply = ok,
@@ -219,9 +225,7 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast({run, Args}, #client_state{module = Module} = State) ->
-	
-	{ok, ModuleState} = Module:run(State, Args),
+handle_cast({set_module_state, ModuleState}, State) ->	
 	{noreply, State#client_state{module_state = ModuleState}};
 
 handle_cast(stop, #client_state{session = Session, module = Module} = State) ->
@@ -370,4 +374,8 @@ remove_handler(Session, HandlerKey) ->
 
 generateHandlerKey(Handler) ->
 	exmpp_utils:random_id("handler." ++ lists:flatten(io_lib:format("~p", [Handler]))).
-		
+
+get_client_state(Session) ->
+	Receiver = get_receiver_process(Session),
+	gen_server:call(Receiver, get_client_state).
+	
