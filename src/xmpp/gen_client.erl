@@ -71,7 +71,14 @@ start(Account, Domain, Host, Port, Password, Module, Args) ->
 
 start(Jid, Host, Port, Password, Module, Args) when is_list(Jid) ->
 	application:start(exmpp),	
-	start(exmpp_jid:make(Jid), Host, Port, Password, Module, Args);
+	JidRec = exmpp_jid:parse(Jid),
+	FullJid = case exmpp_jid:resource(JidRec) of
+		undefined ->
+			exmpp_jid:full(JidRec, random);
+		_Other ->
+			JidRec
+						end,
+	start(FullJid, Host, Port, Password, Module, Args);
 
 start(Jid, Host, Port, Password, Module, Args) when ?IS_JID(Jid) ->		
 	Session = exmpp_session:start(),
