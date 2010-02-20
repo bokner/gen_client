@@ -15,7 +15,6 @@ behaviour_info(callbacks) ->
 		[
 		 {new_session_process, 1},
 		 {execute, 3},
-		 {cancel, 1},
-		 {to_dataform, 1}
+		 {cancel, 1}
 		];
 behaviour_info(_Other) -> undefined.
