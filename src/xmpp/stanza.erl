@@ -24,7 +24,8 @@
 				 publish_with_itemid/4,
 				 discover_pubsub_nodes/2,
 				 retrieve_pubsub_item/3,
-				 get_pubsub_subscriptions/1
+				 get_pubsub_subscriptions/1,
+				 adhoc_command/4
 				]).
 %%
 %% API Functions
@@ -194,9 +195,37 @@ get_pubsub_subscriptions(PubSub) ->
 									]}.
 
 
+adhoc_command(CommandNode, Action, SessionId, FormItems) ->
+		#xmlel{name ='iq', 									 
+										attrs = [
+																		#xmlattr{name = 'type', value = <<"set">>}
+														],
+		  children = [
+									#xmlel{name = 'command',
+												 ns = ?NS_ADHOC,
+												 attrs = [
+																		#xmlattr{name = 'node', value = list_to_binary(CommandNode)},
+																		#xmlattr{name = 'action', value = list_to_binary(Action)},
+																		#xmlattr{name = 'sessionid', value = list_to_binary(SessionId)}																																					
+																	],
+												 children = [
+																		 create_data_form(FormItems)
+																		 ]
+												 }
+									]}.
+	
+
 %%
 %% Local Functions
 %%
 field_list(Fields) ->
 		lists:map(fun({Fieldname, Value}) -> io_lib:format("<field var='~s'><value>~s</value></field>", [Fieldname, Value]) end, Fields).
 
+
+
+create_data_form(FormItems) ->
+		#xmlel{name ='x', ns='jabber:x:data', attrs = [
+																									 #xmlattr{name = 'type', value = <<"submit">>}
+																									 ],
+					 children = FormItems
+					}. 
