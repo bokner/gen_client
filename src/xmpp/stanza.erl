@@ -18,7 +18,9 @@
 %%
 %% Exported Functions
 %%
--export([register/2, add_user/2, create_pubsub_node/4,
+-export([register/2, 
+				 add_user/2, get_active_users/1,
+				 create_pubsub_node/4,
 				 available/1, unavailable/0, directed_presence/1,
 				 subscribe/1, subscribed/1,
 				 publish_with_itemid/4,
@@ -178,6 +180,26 @@ add_user(Jid, Password) when ?IS_JID(Jid) ->
 	</command>
 	</iq>", [Domain, JidStr, Password, Password])),
 		Packet.
+
+get_active_users(Domain) ->
+	[Packet] = 	exmpp_xml:parse_document(
+							io_lib:format("<iq 
+    to='~s'
+    type='set'
+    xml:lang='en'>
+  <command xmlns='http://jabber.org/protocol/commands' 
+           node='http://jabber.org/protocol/admin#get-active-users'>
+    <x xmlns='jabber:x:data' type='submit'>
+      <field type='hidden' var='FORM_TYPE'>
+        <value>http://jabber.org/protocol/admin</value>
+      </field>
+      <field var='max_items'>
+        <value>None</value>
+      </field>
+    </x>
+  </command>
+</iq>", [Domain])),
+		Packet.	
 
 get_pubsub_subscriptions(PubSub) ->
 		#xmlel{name ='iq', 									 

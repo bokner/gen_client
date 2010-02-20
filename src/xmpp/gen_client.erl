@@ -88,7 +88,7 @@ start(Jid, Host, Port, Password, Module, Args) when ?IS_JID(Jid) ->
 	%gen_server:cast(Client, {run, Args}),
 		{ok, ModuleState} = Module:run(Session, Args),
 		gen_server:cast(Client, {set_module_state, ModuleState}),
-	{ok, Session, Client}.
+	{ok, Session}.
 
 login(Session) ->
 	try exmpp_session:login(Session)
@@ -160,8 +160,9 @@ send_sync_packet(Session, Packet, Timeout) ->
 
 
 
-stop(Client) ->
-	gen_server:cast(Client, stop).
+stop(Session) ->
+	Receiver = get_receiver_process(Session),
+	gen_server:cast(Receiver, stop).
 
 
 %%%===================================================================
