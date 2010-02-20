@@ -21,8 +21,7 @@
 
 %% gen_client API callbacks
 
-run(State, [OnlineStatus]) ->
-		Session = State#client_state.session,
+run(Session, [OnlineStatus]) ->
 		gen_client:login(Session),
 		gen_client:send_packet(Session, stanza:available(OnlineStatus)),
 
