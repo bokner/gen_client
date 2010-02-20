@@ -1,7 +1,8 @@
 Prerequisites: 
-	erlang 12.5 and higher;
+	erlang R12B-5 and higher;
 	exmpp
 	
-To build from source, checkout and do:
+To build from source, cd to directory where you checkout/untar/unzip gen_client and do:
 
 erl -make
+
