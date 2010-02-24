@@ -40,11 +40,11 @@
 % Return a list of required functions and their arity
 behaviour_info(callbacks) ->
 	[
-	 {run, 2},
-	 {terminate, 1},
-	 {handle_iq, 6},
-	 {handle_message, 5},
-	 {handle_presence, 5}
+	 {init, 2}, %% Init gen_client implementation; session and argument list
+	 {terminate, 1}, %% Terminate gen_client implementation; client state
+	 {terminate, 2}, %% Terminate gen_client implementation; module ref and client state	 
+	 {handle, 2},		%% Handle stanza; received packet and client state	
+	 {handle, 3}  	%% Handle stanza; module ref, received packet and client state
 	
 	];
 behaviour_info(_Other) -> undefined.
@@ -80,15 +80,18 @@ start(Jid, Host, Port, Password, Module, Args) when is_list(Jid) ->
 						end,
 	start(FullJid, Host, Port, Password, Module, Args);
 
-start(Jid, Host, Port, Password, Module, Args) when ?IS_JID(Jid) ->		
-	Session = exmpp_session:start(),
-	{ok, Client} = gen_server:start_link(?MODULE, [Jid, Password, Host, Port, Module, Session], []),
-	exmpp_session:set_controlling_process(Session, Client),
-	% Run initial script
-	%gen_server:cast(Client, {run, Args}),
-		{ok, ModuleState} = Module:run(Session, Args),
-		gen_server:cast(Client, {set_module_state, ModuleState}),
+start(Jid, Host, Port, Password, Module, Args) when ?IS_JID(Jid) ->
+	{ok, Session} = start(Jid, Host, Port, Password), 	
+	add_handler(Session, Module, Args),
 	{ok, Session}.
+
+start(Jid, Host, Port, Password) when ?IS_JID(Jid) ->		
+	Session = exmpp_session:start(),
+	{ok, Client} = gen_server:start_link(?MODULE, [Jid, Password, Host, Port, Session], []),
+	exmpp_session:set_controlling_process(Session, Client),
+	{ok, Session}.
+
+
 
 login(Session) ->
 	try exmpp_session:login(Session)
@@ -180,15 +183,15 @@ stop(Session) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([JID, Password, Host, Port, Module, Session]) ->
+init([JID, Password, Host, Port, Session]) ->
 	%% Create a new session with basic (digest) authentication:
 	exmpp_session:auth_basic_digest(Session, JID, Password),
 	%% Connect in standard TCP:
 	_StreamId = exmpp_session:connect_TCP(Session, Host, Port),
 	{ok, #client_state{jid = JID,
 										 session = Session,
-										 module = Module,
-										 handlers = [] %%Keyed list {Key, Handler}
+										 handlers = [], %%Keyed list {Key, Handler},
+										 terminators = [] %% Keyed list {Key, Terminator}
 										}
 	}.
 
@@ -206,15 +209,28 @@ init([JID, Password, Host, Port, Module, Session]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({add_handler, Handler},  _From, #client_state{handlers = Handlers} = State) ->
+handle_call({add_handler, Handler},  _From, #client_state{handlers = Handlers, terminators = Terminators} = State) ->
 
 	HandlerKey = generateHandlerKey(Handler),
 		io:format("Adding handler ~p~n", [HandlerKey]),
-	{reply,  HandlerKey, State#client_state{handlers = [{HandlerKey, Handler}| Handlers]}};
+		NewState = case Handler of
+			{HandlerFunc, TerminatorFunc} ->
+				State#client_state{handlers = [{HandlerKey, HandlerFunc}| Handlers], terminators = [{HandlerKey, TerminatorFunc} | Terminators]};
+			_H ->
+				State#client_state{handlers = [{HandlerKey, Handler}| Handlers]}
+		end,
+	{reply,  HandlerKey, NewState};
 
-handle_call({remove_handler, HandlerKey},  _From, #client_state{handlers = Handlers} = State) ->
+handle_call({remove_handler, HandlerKey},  _From, #client_state{handlers = Handlers, terminators = Terminators} = State) ->
 	io:format("Removing handler ~p~n", [HandlerKey]),
-	{reply,  ok, State#client_state{handlers = lists:keydelete(HandlerKey, 1, Handlers)}};
+	%% if a module handler, call terminator function
+	case lists:keysearch(HandlerKey, 1, Terminators) of
+		{value, {HandlerKey, TerminatorFunc}} ->
+			TerminatorFunc(State);
+		false ->
+			void
+	end,	
+	{reply,  ok, State#client_state{handlers = lists:keydelete(HandlerKey, 1, Handlers), terminators = lists:keydelete(HandlerKey, 1, Terminators)}};
 
 handle_call(get_client_state, _From, State) ->
 	{reply, State, State};
@@ -233,12 +249,13 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast({set_module_state, ModuleState}, State) ->	
-	{noreply, State#client_state{module_state = ModuleState}};
-
-handle_cast(stop, #client_state{session = Session, module = Module} = State) ->
+handle_cast(stop, #client_state{session = Session, terminators = Terminators} = State) ->
+	%% Call all module terminators
+	lists:foreach(fun({_Key, TerminatorFunc}) -> 
+												spawn(TerminatorFunc(State))
+									end, Terminators
+								), 
 	exmpp_session:stop(Session),
-	spawn(Module, terminate, [State]),
 	{stop, normal, State};
 
 
@@ -273,49 +290,11 @@ handle_info(Received,
 							 end
 							) %% spawn and return result of handling along with handler key
 		end,				
-		Handlers),		
-	%% Module handlers
-	handle_info2(Received, State),
-	{noreply, State}.
-
-
-handle_info2(#received_packet{packet_type = message,
-															type_attr = Type,
-															from = From,
-															id = Id,
-															raw_packet = Packet}, State) ->
+		Handlers),
 	
-	M = State#client_state.module,
-	spawn(M, handle_message, [Type, From, Id, Packet, State]),
-	{noreply, State};
+{noreply, State}.
 
-handle_info2(#received_packet{packet_type = presence,
-															type_attr = Type,
-															from = From,
-															id = Id,
-															raw_packet = Packet}, State) ->
-	io:format("Incoming presence: ~p~n", [Packet]),
-	
-	M = State#client_state.module,
-	spawn(M, handle_presence, [Type, From, Id, Packet, State]),
-	{noreply, State};
 
-handle_info2(#received_packet{ packet_type = iq,
-															 type_attr = Type,
-															 from = From,
-															 id = Id,
-															 queryns = NS,
-															 raw_packet = Packet}, State) ->
-	io:format("Incoming: ~p~n", [exmpp_xml:document_to_list(Packet)]),
-	
-	M = State#client_state.module,
-	spawn(M, handle_iq, [Type, From, Id, NS, Packet, State]),
-	
-	{noreply, State};
-
-handle_info2(_Info, State) ->
-	%%io:format("Incoming: ~p~n", [Info]),
-	{noreply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -362,15 +341,25 @@ get_receiver_process(Session) ->
 	Receiver.
 
 %% Module handler
-add_handler(Session, Handler, Params) when is_atom(Handler) ->
-	case utils:has_behaviour(Handler, gen_handler) of 
+%% We store handler function and terminator function for every module
+add_handler(Session, Module, Args) when is_atom(Module) ->
+	case utils:has_behaviour(Module, gen_client) of 
 		true ->
-			add_handler(Session, fun(Received, State) -> Handler:handle(Received, State, Params) end);
+			case Module:init(Session, Args) of
+				{ok, ModuleRef} ->
+					add_handler(Session, {fun(Received, State) -> Module:handle(ModuleRef, Received, State) end,
+																fun(State) -> Module:terminate(ModuleRef, State) end});
+				ok ->
+					add_handler(Session, {fun(Received, State) -> Module:handle(Received, State) end,
+																fun(State) -> Module:terminate(State) end});
+				Other ->
+					throw({moduleInitFailed, {Module, Other}})
+			end;		
 		false ->
-			throw({"module has to have 'handler' behaviour", Handler})
+			throw({"module has to have 'gen_client' behaviour", Module})
 	end.
 
-add_handler(Session, Handler) when is_function(Handler) ->
+add_handler(Session, Handler) ->
 	Receiver = get_receiver_process(Session),
 	gen_server:call(Receiver, {add_handler, Handler}).
 

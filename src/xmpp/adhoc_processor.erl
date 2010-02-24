@@ -10,7 +10,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/2, execute/5, generate_sessionid/1, cancel/3, command_items/2]).
+-export([start_link/2, stop/1, execute/5, generate_sessionid/1, cancel/3, command_items/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -24,7 +24,7 @@
 
 -include("gen_client.hrl").
 
--record(p_state, {adhoc_module, commands, command_sessions = dict:new()}).
+-record(p_state, {adhoc_module, adhoc_module_params, commands = dict:new(), command_sessions = dict:new()}).
 
 %%%===================================================================
 %%% API
@@ -37,17 +37,20 @@
 %% @spec start_link(Session, Commands) -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(ClientSession, AdhocModule) ->
-		gen_server:start_link(?MODULE, [ClientSession, AdhocModule], []).
+start_link(AdhocModule, AdhocModuleParams) ->
+		gen_server:start_link(?MODULE, [AdhocModule, AdhocModuleParams], []).
 
-execute(Processor, Command, CommandSession, DataForm, Args) ->
+stop(Processor) ->
+	gen_server:cast(Processor, stop).
+
+execute(Processor, Command, CommandSession, DataForm, ClientState) ->
 		Sessionid = case is_binary(CommandSession) of
 										true ->
 												binary_to_list(CommandSession);
 										false ->
 												CommandSession
 								end,
-		gen_server:call(Processor, {execute, Command, Sessionid, DataForm, Args}).
+		gen_server:call(Processor, {execute, Command, Sessionid, DataForm, ClientState}).
 
 cancel(Processor, Command, CommandSession) ->
 		Sessionid = case is_binary(CommandSession) of
@@ -84,11 +87,10 @@ generate_sessionid(Command) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([ClientSession, AdhocModule]) ->
+init([AdhocModule, AdhocModuleParams]) ->
 		{ok, #p_state{
 									adhoc_module = AdhocModule,
-									commands = lists:foldl(fun(#command{id = Id} = C, D) -> dict:store(Id, C, D)
-																			 end, dict:new(), AdhocModule:get_adhoc_list(ClientSession))
+									adhoc_module_params = AdhocModuleParams
 								 }
 		}.
 
@@ -106,14 +108,16 @@ init([ClientSession, AdhocModule]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({execute, Command, CommandSession, DataForm, Args}, _From, 
-							#p_state{commands = CommandDict, command_sessions = CommandSessions} = State) ->
+handle_call({execute, Command, CommandSession, DataForm, ClientState}, _From, 
+							#p_state{
+											 	commands = CommandDict,
+												command_sessions = CommandSessions} = State) ->
 
 		{ok, #command{handler = Handler}} = dict:find(Command, CommandDict),
 
 		% Create new process or find the one assigned to handle this command session
 		SessionProcess = if CommandSession == new ->
-														 case Handler:new_session_process(Args) of
+														 case Handler:new_session_process(ClientState) of
 																 {ok, S} -> S;
 																 none -> none
 														 end;
@@ -125,7 +129,7 @@ handle_call({execute, Command, CommandSession, DataForm, Args}, _From,
 														 end
 										 end,
 				io:format("P2~n"),
-				R = Handler:execute(SessionProcess, Args, DataForm),
+				R = Handler:execute(SessionProcess, ClientState, DataForm),
 				io:format("P3~nExec result:~p~n", [R]),
 %% Store session if it's new and the command is stateful (i.e. SessionProcess /= none)
 		{NewState, Reply} = if CommandSession == new andalso SessionProcess /= none ->
@@ -167,6 +171,10 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_cast(stop, State) ->
+%%TODO: cancel all hanging commands
+	{stop, normal, State};
+
 handle_cast(_Msg, State) ->
 		{noreply, State}.
 

@@ -11,22 +11,21 @@
 
 -behaviour(gen_client).
 
-
--export([run/2, terminate/1, handle_iq/6, handle_presence/5, handle_message/5]).
-
-
+-export([init/2, terminate/1, terminate/2, handle/2, handle/3]).
 
 -include("gen_client.hrl").
 
 
 %% gen_client API callbacks
 
-run(Session, [OnlineStatus]) ->
+init(Session, [OnlineStatus]) ->
 		gen_client:login(Session),
 		gen_client:send_packet(Session, stanza:available(OnlineStatus)),
+	ok.
 
-	io:format("Dummy client has started."),
-		{ok, dummy_state}.
+%% Doesn't handle anything
+handle(_Received, _State) ->
+	ok.
 
 terminate(State) ->
 				Session = State#client_state.session,
@@ -34,15 +33,10 @@ terminate(State) ->
 				io:format("Dummy client has finished."),
 		ok.
 
-handle_iq(_Type, _From, _Id, _NS, _IQ, State) ->
-		{ok, State#client_state.module_state}.
+%% Following functions should never be called
+terminate(_ModuleRef, _State) ->
+	ok.
 
-
-handle_presence(_Type, _From, _Id, _Packet, State) ->
-		{ok, State#client_state.module_state}.
-
-
-
-handle_message(_Type, _From, _Id, _Packet, State) ->
-		{ok, State#client_state.module_state}.
+handle(_ModuleRef, _Received, _State) ->
+	ok.
 
