@@ -17,7 +17,7 @@
 %% API Functions
 %%
 tidy_subscriptions(Jid, Password, Host, Port, PubSub) ->
-	{ok, Session, _C} = gen_client:start(Jid, Host, Port, Password, dummy_client, ["On tidy duty"]),
+	{ok, Session} = gen_client:start(Jid, Host, Port, Password, dummy_client, ["On tidy duty"]),
 	JidOfflineHandler = 
 		fun(#received_packet{packet_type = presence, type_attr = "unavailable", from = PeerJid}, #client_state{jid = BotJid} = _State) when BotJid /= PeerJid ->
 				 {Node, Domain, _Resource} = PeerJid,	
@@ -59,18 +59,18 @@ tidy_subscriptions(Jid, Password, Host, Port, PubSub) ->
 unsubscribe_temporary(Session, PubSub, Jid, Node, _Subid) ->
 	%% Prepare trigger for probe response
 	ProbeSuccessful = fun(#received_packet{from = FullJid, packet_type = presence, type_attr = "available"}, _State) ->
-													{Acc, Domain, Resource} = FullJid,										
-													case exmpp_jid:parse(Jid) of
-														{jid, Jid, Acc, Domain, Resource} ->
-															io:format("probe matches for ~p~n", [FullJid]),
-															true;
-														_NoMatch ->
-															io:format("probe doesn't match for ~p, ~p~n", [Jid, FullJid]),
-															false
-													end;
-											 (_NonPresence, _State) ->
-												 false
-										 end, 
+												 {Acc, Domain, Resource} = FullJid,										
+												 case exmpp_jid:parse(Jid) of
+													 {jid, Jid, Acc, Domain, Resource} ->
+														 io:format("probe matches for ~p~n", [FullJid]),
+														 true;
+													 _NoMatch ->
+														 io:format("probe doesn't match for ~p, ~p~n", [Jid, FullJid]),
+														 false
+												 end;
+											(_NonPresence, _State) ->
+												false
+										end, 
 	%% Send presence probe
 	io:format("Sending probe to ~p:~n", [Jid]),
 	

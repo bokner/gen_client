@@ -26,9 +26,7 @@
 %
 behaviour_info(callbacks) ->
 		[
-			{get_adhoc_list, 2},   %% module state, client state
-			{execute_command, 5}, %% command, command session, data form, module state, client state
-			{cancel_command, 4} %% command, command session, module state, client state
+			{get_adhoc_list, 2}   %% module state, client state
 		];
 behaviour_info(_Other) -> undefined.
 
@@ -114,7 +112,8 @@ handle2({Acc, Domain, Resource} = From,  #iq{kind = request, type = get,  ns = ?
 		io:format("List of ad hoc commands is requested. ~n"),
 		%% Construct response
 		Result = exmpp_iq:iq_to_xmlel(
-							 exmpp_iq:result(IQ, adhoc_processor:command_items(AdhocProcessor, ClientState), exmpp_jid:to_list(JID))
+							 exmpp_iq:result(IQ, 
+																 adhoc_processor:command_items(AdhocProcessor, ClientState))
 							),
 		gen_client:send_packet(Session, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
 		ok;

@@ -109,7 +109,7 @@ handle_call({execute, Command, CommandSession, DataForm, ClientState}, _From,
 										 adhoc_module_params = AdhocModuleParams,										 
 										 command_sessions = CommandSessions} = State) ->
 	CommandList = AdhocModule:get_adhoc_list(AdhocModuleParams, ClientState),
-	{value, #command{handler = Handler}} = lists:keyfind(Command, 2, CommandList),
+	{value, #command{handler = Handler}} = lists:keysearch(Command, 2, CommandList),
 	
 	% Create new process or find the one assigned to handle this command session
 	SessionProcess = if CommandSession == new ->
@@ -144,7 +144,7 @@ handle_call({cancel, Command, Sessionid, ClientState}, _From,
 										 adhoc_module_params = AdhocModuleParams,
 										 command_sessions = CommandSessions} = State) ->
 	CommandList = AdhocModule:get_adhoc_list(AdhocModuleParams, ClientState),
-	{value, #command{handler = Handler}} = lists:keyfind(Command, 2, CommandList),
+	{value, #command{handler = Handler}} = lists:keysearch(Command, 2, CommandList),
 	P =  case dict:find(Sessionid, CommandSessions) of
 				 
 				 {ok, X} ->
@@ -225,13 +225,14 @@ commands(Processor, ClientState) ->
 
 
 command_items(Processor, #client_state{jid = JID} = ClientState) ->
-	#xmlel{name = 'query', attrs = [#xmlattr{name = node, value = ?NS_ADHOC_b}],
+	Commands = commands(Processor, ClientState), 
+	#xmlel{name = 'query', ns = ?NS_DISCO_ITEMS, attrs = [#xmlattr{name = node, value = ?NS_ADHOC_b}],
 				 children = lists:map(fun(#command{id = Id, name = Name}) ->
 																	 #xmlel{name = "item",
 																					attrs = [
 																									 #xmlattr{name = node, value = Id},
 																									 #xmlattr{name = name, value = Name},
-																									 #xmlattr{name = jid, value = list_to_binary(JID)}
+																									 #xmlattr{name = jid, value = exmpp_jid:to_binary(JID)}
 																									]
-																				 } end, commands(Processor, ClientState))
-				}.
+																				 } end, Commands)}.
+
