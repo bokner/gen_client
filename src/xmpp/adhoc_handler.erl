@@ -94,7 +94,7 @@ case Action of
 				;
 		<<"cancel">> ->
 				io:format("Command " ++ binary_to_list(Command) ++ " is canceled.~n"),
-				adhoc_processor:cancel(AdhocProcessor, Command, Command_Session),
+				adhoc_processor:cancel(AdhocProcessor, Command, Command_Session, ClientState),
 								%% Construct response
 				Result = exmpp_iq:iq_to_xmlel(
 							 exmpp_iq:result(IQ, exmpp_xml:set_attributes(Payload, [{status, canceled}]))
@@ -114,7 +114,7 @@ handle2({Acc, Domain, Resource} = From,  #iq{kind = request, type = get,  ns = ?
 		io:format("List of ad hoc commands is requested. ~n"),
 		%% Construct response
 		Result = exmpp_iq:iq_to_xmlel(
-							 exmpp_iq:result(IQ, commands_to_xml(adhoc_processor:get_adhoc_list(AdhocProcessor, From, ClientState), exmpp_jid:to_list(JID)))
+							 exmpp_iq:result(IQ, adhoc_processor:command_items(AdhocProcessor, ClientState), exmpp_jid:to_list(JID))
 							),
 		gen_client:send_packet(Session, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
 		ok;
@@ -128,15 +128,4 @@ handle2(_From,  _Packet, _State, _AdhocModule) ->
 %%
 %% Local Functions
 %%
-commands_to_xml(Commands, JID) ->
-		#xmlel{name = 'query', attrs = [#xmlattr{name = node, value = ?NS_ADHOC_b}],
-					 children = lists:map(fun(#command{id = Id, name = Name}) ->
-										#xmlel{name = "item",
-													 attrs = [
-																		#xmlattr{name = node, value = Id},
-																		#xmlattr{name = name, value = Name},
-																		#xmlattr{name = jid, value = list_to_binary(JID)}
-																	 ]
-													 } end, Commands)
-					 }.
 
