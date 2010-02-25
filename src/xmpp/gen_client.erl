@@ -71,14 +71,8 @@ start(Account, Domain, Host, Port, Password, Module, Args) ->
 
 start(Jid, Host, Port, Password, Module, Args) when is_list(Jid) ->
 	application:start(exmpp),	
-	JidRec = exmpp_jid:parse(Jid),
-	FullJid = case exmpp_jid:resource(JidRec) of
-		undefined ->
-			exmpp_jid:full(JidRec, random);
-		_Other ->
-			JidRec
-						end,
-	start(FullJid, Host, Port, Password, Module, Args);
+
+	start(utils:to_jid(Jid), Host, Port, Password, Module, Args);
 
 start(Jid, Host, Port, Password, Module, Args) when ?IS_JID(Jid) ->
 	{ok, Session} = start(Jid, Host, Port, Password), 	
@@ -375,4 +369,5 @@ generateHandlerKey(Handler) ->
 get_client_state(Session) ->
 	Receiver = get_receiver_process(Session),
 	gen_server:call(Receiver, get_client_state).
-	
+
+

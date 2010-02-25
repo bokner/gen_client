@@ -19,7 +19,7 @@
 %% Exported Functions
 %%
 -export([register/2, 
-				 add_user/2, get_all_users/1,
+				 add_user/2, get_all_users/1, get_user_password/1,
 				 create_pubsub_node/4,
 				 available/1, unavailable/0, directed_presence/1,
 				 subscribe/1, subscribed/1,
@@ -199,6 +199,30 @@ get_pubsub_subscriptions(PubSub) ->
 																		 ]
 												 }
 									]}.
+
+
+%% Get User Password
+%% XEP-0133, ejabberd impelementation
+%% Starts with sending data form with jid filled out.
+%%
+get_user_password(Jid) ->
+			Domain = exmpp_jid:domain_as_list(Jid),
+		JidStr = exmpp_jid:to_list(Jid),
+	[Packet] = 	exmpp_xml:parse_document(
+							io_lib:format(
+	"<iq type='set' to='~s'>
+<command xmlns='http://jabber.org/protocol/commands' node='http://jabber.org/protocol/admin#get-user-password' >
+<x xmlns='jabber:x:data' type='submit' >
+<field type='hidden' var='FORM_TYPE' >
+<value>http://jabber.org/protocol/admin</value>
+</field>
+<field type='jid-single' var='accountjid' >
+<value>~s</value>
+</field>
+</x>
+</command>
+</iq>", [Domain, JidStr])),
+		Packet.
 
 
 adhoc_command(CommandNode, Action, SessionId, FormItems) ->

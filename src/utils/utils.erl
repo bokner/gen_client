@@ -9,7 +9,8 @@
 
 -export([float_round/2, empty_string/1, get_unix_timestamp/1, get_MAC/0, has_behaviour/2,
 				 generate_random_string/1,
-				 get_process_state/1
+				 get_process_state/1,
+				 to_jid/1
 				 ]).
 
 float_round(N, P) ->
@@ -46,3 +47,12 @@ get_process_state(Pid) ->
 				_Other ->
 						not_supported
 		end.
+
+to_jid(JidStr) when is_list(JidStr) ->
+	JidRec = exmpp_jid:parse(JidStr),
+	case exmpp_jid:resource(JidRec) of
+		undefined ->
+			exmpp_jid:full(JidRec, random);
+		_Other ->
+			JidRec
+	end.
