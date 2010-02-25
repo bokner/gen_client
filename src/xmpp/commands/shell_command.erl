@@ -12,7 +12,7 @@
 -behaviour(gen_fsm).
 -behaviour(gen_command).
 
--export([new_session_process/1, execute/3, cancel/1, to_dataform/1]).
+-export([new_session_process/2, execute/4, cancel/3]).
 
 -compile(export_all).
 
@@ -33,17 +33,15 @@
 -record(p_state, {dir = "."}).
 
 %%% gen_command
-new_session_process(_Args) ->
+new_session_process(_AdhocModuleParams, _ClientState) ->
 		start_link().
 
-execute(SessionProcess, _Args, DataForm) ->
+execute(SessionProcess, _AdhocModuleParams, _ClientState, DataForm) ->
 		gen_fsm:sync_send_event(SessionProcess, {execute, DataForm}).
 
-cancel(SessionProcess) ->
+cancel(SessionProcess, _AdhocModuleParams, _ClientState) ->
 		gen_fsm:send_all_state_event(SessionProcess, cancel).
 
-to_dataform(Data) ->
-		ok.
 
 
 %%%===================================================================

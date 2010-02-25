@@ -9,7 +9,7 @@
 
 -behaviour(gen_command).
 
--export([new_session_process/1, execute/3, cancel/1, to_dataform/1]).
+-export([new_session_process/2, execute/4, cancel/3]).
 
 
 -include_lib("exmpp/include/exmpp_nss.hrl").
@@ -19,11 +19,11 @@
 -include("gen_client.hrl").
 
 % No process is created for handling the command
-new_session_process(_Args) ->
+new_session_process(_AdhocModuleParams, _ClientState) ->
 		none.
 
 % This is a one-shot command, so there is no session tracking and no incoming data.
-execute(_Session, _Args, _DataForm) ->
+execute(_Session, _AdhocModuleParams, _ClientState, _DataForm) ->
 		{ok, Hostname} = inet:gethostname(),
 		{ok, {P1, P2, P3, P4}} = inet:getaddr(Hostname, inet),
 		{OS_Family, OS_Name} = os:type(),
@@ -42,7 +42,7 @@ execute(_Session, _Args, _DataForm) ->
 		#command_result{result = to_dataform(DataResult), status = completed}.
 
 
-cancel(_Session) ->
+cancel(_Session, _AdhocModuleParams, _ClientState) ->
 		ok.
 
 to_dataform(Data) ->

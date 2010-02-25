@@ -113,7 +113,7 @@ handle_call({execute, Command, CommandSession, DataForm, ClientState}, _From,
 	
 	% Create new process or find the one assigned to handle this command session
 	SessionProcess = if CommandSession == new ->
-												case Handler:new_session_process(ClientState) of
+												case Handler:new_session_process(AdhocModuleParams, ClientState) of
 													{ok, S} -> S;
 													none -> none
 												end;
@@ -125,7 +125,7 @@ handle_call({execute, Command, CommandSession, DataForm, ClientState}, _From,
 												end
 									 end,
 	io:format("P2~n"),
-	R = Handler:execute(SessionProcess, ClientState, DataForm),
+	R = Handler:execute(SessionProcess, AdhocModuleParams, ClientState, DataForm),
 	io:format("P3~nExec result:~p~n", [R]),
 	%% Store session if it's new and the command is stateful (i.e. SessionProcess /= none)
 	{NewState, Reply} = if CommandSession == new andalso SessionProcess /= none ->
@@ -138,7 +138,7 @@ handle_call({execute, Command, CommandSession, DataForm, ClientState}, _From,
 	
 	{reply, Reply, NewState};
 
-handle_call({cancel, Command, Sessionid, ClientState}, _From, 
+handle_call({cancel, Command, Sessionid, AdhocModuleParams, ClientState}, _From, 
 						#p_state{
 										 adhoc_module = AdhocModule,
 										 adhoc_module_params = AdhocModuleParams,
@@ -151,7 +151,7 @@ handle_call({cancel, Command, Sessionid, ClientState}, _From,
 					 X;
 				 _Error -> none
 			 end,
-	Handler:cancel(P),
+	Handler:cancel(P, AdhocModuleParams, ClientState),
 	{reply, ok, State#p_state{command_sessions = dict:erase(Sessionid, State#p_state.command_sessions)}};
 
 handle_call({get_commands, ClientState}, _From, #p_state{adhoc_module = AdhocModule, adhoc_module_params = AdhocModuleParams} = State) ->
