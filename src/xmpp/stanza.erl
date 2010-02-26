@@ -27,7 +27,7 @@
 				 discover_pubsub_nodes/2,
 				 retrieve_pubsub_item/3,
 				 get_pubsub_subscriptions/1,
-				 adhoc_command/4
+				 adhoc_command/3, adhoc_command/4
 				]).
 %%
 %% API Functions
@@ -224,7 +224,9 @@ get_user_password(Jid) ->
 </iq>", [Domain, JidStr])),
 		Packet.
 
-
+adhoc_command(CommandNode, Action, FormItems) ->
+	adhoc_command(CommandNode, Action, new, FormItems).
+	
 adhoc_command(CommandNode, Action, SessionId, FormItems) ->
 		#xmlel{name ='iq', 									 
 										attrs = [
@@ -234,9 +236,9 @@ adhoc_command(CommandNode, Action, SessionId, FormItems) ->
 									#xmlel{name = 'command',
 												 ns = ?NS_ADHOC,
 												 attrs = [
-																		#xmlattr{name = 'node', value = list_to_binary(CommandNode)},
-																		#xmlattr{name = 'action', value = list_to_binary(Action)},
-																		#xmlattr{name = 'sessionid', value = list_to_binary(SessionId)}																																					
+																		#xmlattr{name = 'node', value = exmpp_utils:any_to_binary(CommandNode)},
+																		#xmlattr{name = 'action', value = exmpp_utils:any_to_binary(Action)},
+																		#xmlattr{name = 'sessionid', value = exmpp_utils:any_to_binary(SessionId)}																																					
 																	],
 												 children = [
 																		 create_data_form(FormItems)

@@ -98,7 +98,7 @@ login(Session) ->
 %% Send packet asynchronously
 send_packet(Session, Packet) ->
 	io:format("Outgoing:~p~n", [exmpp_xml:document_to_list(Packet)]),
-	exmpp_session:send_packet(Session, Packet).
+	spawn(fun() -> exmpp_session:send_packet(Session, Packet) end).
 
 %%
 %% Sends packet and waits Timeout ms for the packet matching the 
@@ -119,7 +119,7 @@ send_sync_packet(Session, Packet, Trigger, Timeout) ->
 						 end,
 	HandlerKey = add_handler(Session, Callback),
 	%% ...send the packet...
-	exmpp_session:send_packet(Session, Packet),
+  send_packet(Session, Packet),
 	%% ...and wait for response (it should come from controlling process)
 	R = receive 
 				{ok, Response, ResponseId} -> %% we only interested in a response to our Id, 

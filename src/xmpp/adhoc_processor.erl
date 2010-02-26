@@ -63,7 +63,7 @@ cancel(Processor, Command, CommandSession, ClientState) ->
 
 
 generate_sessionid(Command) ->
-	exmpp_utils:random_id(binary_to_list(Command)).
+	exmpp_utils:random_id(exmpp_utils:any_to_list(Command)).
 
 
 
@@ -108,11 +108,12 @@ handle_call({execute, Command, CommandSession, DataForm, ClientState}, _From,
 										 adhoc_module = AdhocModule,
 										 adhoc_module_params = AdhocModuleParams,										 
 										 command_sessions = CommandSessions} = State) ->
+	io:format("adhocprocessor:Command:~p~n", [Command]),
 	CommandList = AdhocModule:get_adhoc_list(AdhocModuleParams, ClientState),
 	{value, #command{handler = Handler}} = lists:keysearch(Command, 2, CommandList),
 	
 	% Create new process or find the one assigned to handle this command session
-	SessionProcess = if CommandSession == new ->
+	SessionProcess = if CommandSession == new orelse CommandSession == "new" ->
 												case Handler:new_session_process(AdhocModuleParams, ClientState) of
 													{ok, S} -> S;
 													none -> none
