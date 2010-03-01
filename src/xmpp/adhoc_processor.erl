@@ -11,7 +11,7 @@
 
 %% API
 -export([start_link/3, stop/1, execute/5, generate_sessionid/1, cancel/4, command_items/2]).
-
+-export([field_from_dataform/2]).
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 				 terminate/2, code_change/3]).
@@ -237,3 +237,22 @@ command_items(Processor, #client_state{jid = JID} = ClientState) ->
 																									]
 																				 } end, Commands)}.
 
+
+
+field_from_dataform(DataForm, FieldName) ->
+	Fields = exmpp_xml:get_elements(DataForm, 'field'),
+	get_field(Fields, FieldName, undefined).
+		
+
+get_field([], _F, Default) ->
+		Default;
+
+get_field([F | Rest], FieldName, Default) ->
+		Var = exmpp_xml:get_attribute(F, 'var', undefined),
+		io:format("field:~p", [Var]),
+		case Var =:= exmpp_utils:any_to_binary(FieldName) of
+				true ->
+						F;
+				false ->
+						get_field(Rest, FieldName, Default)
+		end.
