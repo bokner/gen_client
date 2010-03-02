@@ -7,7 +7,8 @@
 
 -module(utils).
 
--export([float_round/2, empty_string/1, get_unix_timestamp/1, get_MAC/0, has_behaviour/2,
+-export([float_round/2, empty_string/1, get_unix_timestamp/1, get_MAC/0, shell_command/2,
+				 has_behaviour/2,
 				 generate_random_string/1,
 				 get_process_state/1,
 				 to_jid/1
@@ -56,3 +57,21 @@ to_jid(JidStr) when is_list(JidStr) ->
 		_Other ->
 			JidRec
 	end.
+
+
+shell_command(Dir, Command) ->
+		   Port = open_port({spawn, Command},
+		     [{cd, Dir}, stream, use_stdio, stderr_to_stdout]),
+		D = receive
+				{Port, {data, Data}} ->
+								Data
+				 after 1000 ->
+								 "timeout"
+		end,
+		try
+				port_close(Port),
+				D
+		catch Exc:Reason ->
+							 "Exception on command attempt"
+		end.
+

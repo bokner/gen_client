@@ -254,31 +254,15 @@ shell_command(Dir_Binary, Command_Binary) ->
 			 false ->
 					 case empty_string(Dir) of
 							 true ->
-									 run_command(".", Command);
+									 utils:shell_command(".", Command);
 							 false ->
-									 run_command(Dir, Command)
+									 utils:shell_command(Dir, Command)
 					 end
 	 end,
 
 	 output_form(Result).
 
 
-
-run_command(Dir, Command) ->
-		   Port = open_port({spawn, Command},
-		     [{cd, Dir}, stream, use_stdio, stderr_to_stdout]),
-		D = receive
-				{Port, {data, Data}} ->
-								Data
-				 after 1000 ->
-								 "timeout"
-		end,
-		try
-				port_close(Port),
-				D
-		catch Exc:Reason ->
-							 "Exception on command attempt"
-		end.
 
 
 from_dataform(DataForm) ->
