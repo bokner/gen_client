@@ -61,7 +61,7 @@ to_jid(JidStr) when is_list(JidStr) ->
 
 shell_command(Dir, Command) ->
 		   Port = open_port({spawn, Command},
-		     [{cd, Dir}, stream, use_stdio, stderr_to_stdout]),
+		     [{cd, Dir}, stream, use_stdio, stderr_to_stdout, binary]),
 		D = receive
 				{Port, {data, Data}} ->
 								Data
