@@ -11,7 +11,7 @@
 
 %% API
 -export([start_link/3, stop/1, execute/5, generate_sessionid/1, cancel/4, command_items/2]).
--export([field_from_dataform/2]).
+-export([field_from_dataform/2, fields_from_dataform/1, fields_to_dataform/1]).
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 				 terminate/2, code_change/3]).
@@ -242,7 +242,18 @@ command_items(Processor, #client_state{jid = JID} = ClientState) ->
 field_from_dataform(DataForm, FieldName) ->
 	Fields = exmpp_xml:get_elements(DataForm, 'field'),
 	get_field(Fields, FieldName, undefined).
-		
+
+%% Retrieves keyed list {var, label, value} of fields from data form
+fields_from_dataform(DataForm) ->
+	Fields = exmpp_xml:get_elements(DataForm, 'field'),
+	lists:map(fun(F) ->
+								 {
+									exmpp_xml:get_attribute(F, 'var', undefined),
+									exmpp_xml:get_attribute(F, 'label', undefined),
+									exmpp_xml:get_cdata(
+									exmpp_xml:get_element(F, "value")
+																		 )
+								 } end, Fields).
 
 get_field([], _F, Default) ->
 		Default;
@@ -256,3 +267,22 @@ get_field([F | Rest], FieldName, Default) ->
 				false ->
 						get_field(Rest, FieldName, Default)
 		end.
+
+
+%% Build basic data form from list of tuples {Variable, Description, Value}
+%% All fields will be of type "text-single"
+%% This will suit cases such as data forms for exchange between two bots, where presentation is not important.
+
+fields_to_dataform(Fields) ->
+		#xmlel{name = 'x', ns = 'jabber:x:data', attrs = [#xmlattr{name = type, value = <<"result">>}],
+					 children = [
+											 lists:map(fun({Var, Label, Value}) ->
+																																					#xmlel{name = 'field', attrs = [
+																																																					#xmlattr{name = var, value = Var},
+																																																					#xmlattr{name = label, value = Label},
+																																																					#xmlattr{name = type, value = <<"text-single">>}
+																																																				 ],
+																																								 children = [#xmlel{name = 'value', children = [#xmlcdata{cdata = Value}]}]
+																																								 } end, Fields)
+											]
+					 }.
