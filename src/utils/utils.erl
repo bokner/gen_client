@@ -40,8 +40,15 @@ get_process_state(Pid) ->
 				sys:get_status(Pid),
 		case Mod of
 				gen_fsm ->
-						[_Pid, _Status, State, _Module, _Timeout] = Misc,
+					case Misc of
+						[_Pid, _Status, State, _Module, _Timeout] ->
 						State;
+						[_Header, _Status, Data] ->
+						{data, [{"StateData", State}]} = Data,
+						 State;
+						_Other ->
+							not_known
+					end;
 				gen_server ->
 						[_Pid, State, _Module, _Timeout] = Misc,
 						State;
