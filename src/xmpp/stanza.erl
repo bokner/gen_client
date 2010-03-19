@@ -205,7 +205,7 @@ get_pubsub_subscriptions(PubSub) ->
 %% XEP-0133, ejabberd impelementation
 %% Starts with sending data form with jid filled out.
 %%
-get_user_password(Jid) ->
+get_user_password(Jid) when ?IS_JID(Jid) ->
 			Domain = exmpp_jid:domain_as_list(Jid),
 		JidStr = exmpp_jid:to_list(Jid),
 	[Packet] = 	exmpp_xml:parse_document(
@@ -222,7 +222,10 @@ get_user_password(Jid) ->
 </x>
 </command>
 </iq>", [Domain, JidStr])),
-		Packet.
+		Packet;
+
+get_user_password(Jid) ->
+	get_user_password(exmpp_jid:parse(Jid)).
 
 adhoc_command(CommandNode, Action, FormItems) ->
 	adhoc_command(CommandNode, Action, new, FormItems).
@@ -241,7 +244,7 @@ adhoc_command(CommandNode, Action, SessionId, FormItems) ->
 																		#xmlattr{name = 'sessionid', value = exmpp_utils:any_to_binary(SessionId)}																																					
 																	],
 												 children = [
-																		 create_data_form(FormItems)
+																		 adhoc_processor:fields_to_dataform(FormItems)
 																		 ]
 												 }
 									]}.
@@ -254,10 +257,3 @@ field_list(Fields) ->
 		lists:map(fun({Fieldname, Value}) -> io_lib:format("<field var='~s'><value>~s</value></field>", [Fieldname, Value]) end, Fields).
 
 
-
-create_data_form(FormItems) ->
-		#xmlel{name ='x', ns='jabber:x:data', attrs = [
-																									 #xmlattr{name = 'type', value = <<"submit">>}
-																									 ],
-					 children = FormItems
-					}. 

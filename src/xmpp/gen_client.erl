@@ -26,6 +26,7 @@
 
 -export([behaviour_info/1]).
 
+-compile(export_all).
 
 -include_lib("exmpp/include/exmpp_client.hrl").
 -include_lib("exmpp/include/exmpp_nss.hrl").
@@ -140,7 +141,7 @@ send_sync_packet(Session, Packet, Timeout) ->
 	Id = exmpp_xml:get_attribute(Packet, id, none),
 	{P, PacketId} = case Id of
 										none ->
-											NewId = exmpp_utils:random_id("session"),
+											NewId = exmpp_utils:random_id("session."++ lists:flatten(io_lib:format("~p", [self()]))),
 											NewPacket = exmpp_xml:set_attribute(Packet, id, NewId),
 											{NewPacket, NewId};
 										_Id ->
@@ -205,7 +206,7 @@ init([JID, Password, Host, Port, Session]) ->
 %%--------------------------------------------------------------------
 handle_call({add_handler, Handler},  _From, #client_state{handlers = Handlers, terminators = Terminators} = State) ->
 
-	HandlerKey = generateHandlerKey(Handler),
+	HandlerKey = generateHandlerKey(Handler, Handlers),
 		io:format("Adding handler ~p~n", [HandlerKey]),
 		NewState = case Handler of
 			{HandlerFunc, TerminatorFunc} ->
@@ -269,8 +270,9 @@ handle_cast(_Request, State) ->
 %%--------------------------------------------------------------------
 
 %% All received packets will trigger handle_info calls (because we have assigned the process to be a controlling process of session).
-handle_info(Received, 
+handle_info(#received_packet{raw_packet = Packet} = Received, 
 						#client_state{handlers = Handlers, session = Session} = State) ->
+	io:format("Incoming: ~p~n", [exmpp_xml:document_to_list(Packet)]),
 	%% Dynamic handlers	
 	lists:foreach(
 		fun({Key, Handler}) ->
@@ -363,8 +365,18 @@ remove_handler(Session, HandlerKey) ->
 	Receiver = get_receiver_process(Session),
 	gen_server:call(Receiver, {remove_handler, HandlerKey}).
 
-generateHandlerKey(Handler) ->
-	exmpp_utils:random_id("handler." ++ lists:flatten(io_lib:format("~p", [Handler]))).
+generateHandlerKey(Handler, ExistingHandlers) ->
+	K = exmpp_utils:random_id("handler."  ++  lists:flatten(io_lib:format("~p::~p", [Handler, self()]))),
+	case lists:keymember(K, 1, ExistingHandlers) of
+		true ->
+			  io:format("Key collision: ~p", [K]),
+				{A1,A2,A3} = now(),
+				random:seed(A1+1, A2+1, A3+1),
+				generateHandlerKey(Handler, ExistingHandlers);
+		false ->
+			K
+	end.
+			
 
 get_client_state(Session) ->
 	Receiver = get_receiver_process(Session),

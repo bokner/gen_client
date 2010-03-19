@@ -274,15 +274,15 @@ get_field([F | Rest], FieldName, Default) ->
 %% This will suit cases such as data forms for exchange between two bots, where presentation is not important.
 
 fields_to_dataform(Fields) ->
-		#xmlel{name = 'x', ns = 'jabber:x:data', attrs = [#xmlattr{name = type, value = <<"result">>}],
-					 children = [
+		#xmlel{name = 'x', ns = 'jabber:x:data', attrs = [#xmlattr{name = type, value = <<"submit">>}],
+					 children = 
 											 lists:map(fun({Var, Label, Value}) ->
 																																					#xmlel{name = 'field', attrs = [
-																																																					#xmlattr{name = var, value = Var},
-																																																					#xmlattr{name = label, value = Label},
+																																																					#xmlattr{name = var, value = exmpp_utils:any_to_binary(Var)},
+																																																					#xmlattr{name = label, value = exmpp_utils:any_to_binary(Label)},
 																																																					#xmlattr{name = type, value = <<"text-single">>}
 																																																				 ],
-																																								 children = [#xmlel{name = 'value', children = [#xmlcdata{cdata = Value}]}]
+																																								 children = [#xmlel{name = 'value', children = [#xmlcdata{cdata = exmpp_utils:any_to_binary(Value)}]}]
 																																								 } end, Fields)
-											]
+
 					 }.
