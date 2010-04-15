@@ -278,11 +278,11 @@ fields_to_dataform(Fields) ->
 					 children = 
 											 lists:map(fun({Var, Label, Value}) ->
 																																					#xmlel{name = 'field', attrs = [
-																																																					#xmlattr{name = var, value = exmpp_utils:any_to_binary(Var)},
-																																																					#xmlattr{name = label, value = exmpp_utils:any_to_binary(Label)},
+																																																					#xmlattr{name = var, value = vroc_utils:any_to_binary(Var)},
+																																																					#xmlattr{name = label, value = vroc_utils:any_to_binary(Label)},
 																																																					#xmlattr{name = type, value = <<"text-single">>}
 																																																				 ],
-																																								 children = [#xmlel{name = 'value', children = [#xmlcdata{cdata = exmpp_utils:any_to_binary(Value)}]}]
+																																								 children = [#xmlel{name = 'value', children = [#xmlcdata{cdata = vroc_utils:any_to_binary(Value)}]}]
 																																								 } end, Fields)
 
 					 }.

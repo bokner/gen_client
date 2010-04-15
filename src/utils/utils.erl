@@ -7,7 +7,8 @@
 
 -module(utils).
 
--export([float_round/2, empty_string/1, get_unix_timestamp/1, get_MAC/0, shell_command/2,
+-export([float_round/2, num_to_str/1,
+				 empty_string/1, get_unix_timestamp/1, get_MAC/0, shell_command/2,
 				 has_behaviour/2,
 				 generate_random_string/1,
 				 get_process_state/1,
@@ -82,3 +83,5 @@ shell_command(Dir, Command) ->
 							 "Exception on command attempt"
 		end.
 
+num_to_str(Number) ->
+		lists:flatten(io_lib:format("~p", [Number])).
