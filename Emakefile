@@ -2,7 +2,7 @@
 %%
 %% --
 
-{'src/xmpp/*', [debug_info, {outdir, "./ebin"},  {i, "include/."}]}.
-{'src/xmpp/commands/*', [debug_info, {outdir, "./ebin"},  {i, "include/."}]}.
-{'src/examples/*', [debug_info, {outdir, "./ebin"},  {i, "include/."}]}.
-{'src/utils/*', [debug_info, {outdir, "./ebin"},  {i, "include/."}]}.
+{'lib/gen_client/src/xmpp/*', [debug_info, {outdir, "./ebin"},  {i, "lib/gen_client/include/."}]}.
+{'lib/gen_client/src/xmpp/commands/*', [debug_info, {outdir, "./ebin"},  {i, "lib/gen_client/include/."}]}.
+{'lib/gen_client/src/examples/*', [debug_info, {outdir, "./ebin"},  {i, "lib/gen_client/include/."}]}.
+{'lib/gen_client/src/utils/*', [debug_info, {outdir, "./ebin"},  {i, "lib/gen_client/include/."}]}.
