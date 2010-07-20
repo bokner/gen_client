@@ -44,7 +44,7 @@ behaviour_info(_Other) -> undefined.
 %%
 %% API Functions
 %%
-init(Session, [DiscoModule, DiscoModuleParams]) ->
+init(Client, [DiscoModule, DiscoModuleParams]) ->
 	{ok, {DiscoModule, DiscoModuleParams}}.
 
 terminate(_ClientState) ->
@@ -64,8 +64,8 @@ handle(_, _, _) ->
 	ok.
 
 %% disco#info 
-handle2({Acc, Domain, Resource} = _From, #iq{kind = request, type = get,  ns = ?NS_DISCO_INFO, payload = #xmlel{attrs = []}} = IQ, #client_state{session = Session} = ClientState, DiscoModule, DiscoModuleParams) ->
-	Query = exmpp_xml:set_children(?QUERY_INFO, DiscoModule:disco_info(DiscoModuleParams, ClientState)),
+handle2({Acc, Domain, Resource} = _From, #iq{kind = request, type = get,  ns = ?NS_DISCO_INFO, payload = #xmlel{attrs = []}} = IQ, Client, DiscoModule, DiscoModuleParams) ->
+	Query = exmpp_xml:set_children(?QUERY_INFO, DiscoModule:disco_info(DiscoModuleParams, Client)),
 				Result = 
 					exmpp_iq:iq_to_xmlel(
 							 exmpp_iq:result(IQ, Query
@@ -73,14 +73,14 @@ handle2({Acc, Domain, Resource} = _From, #iq{kind = request, type = get,  ns = ?
 							)
 															),
 
-				gen_client:send_packet(Session, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
+				gen_client:send_packet(Client, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
 
 		ok;
 
 %% disco#info with node
 handle2({Acc, Domain, Resource} = _From, #iq{kind = request, type = get,  ns = ?NS_DISCO_INFO, 
-																						 payload = #xmlel{attrs = [#xmlattr{name = 'node', value = Node}]}} = IQ, #client_state{session = Session} = ClientState, DiscoModule, DiscoModuleParams) ->
-	Query = exmpp_xml:set_children(?QUERY_INFO, DiscoModule:disco_info(DiscoModuleParams, ClientState, Node)),
+																						 payload = #xmlel{attrs = [#xmlattr{name = 'node', value = Node}]}} = IQ, Client, DiscoModule, DiscoModuleParams) ->
+	Query = exmpp_xml:set_children(?QUERY_INFO, DiscoModule:disco_info(DiscoModuleParams, Client, Node)),
 				Result = 
 					exmpp_iq:iq_to_xmlel(
 							 exmpp_iq:result(IQ, Query
@@ -88,27 +88,27 @@ handle2({Acc, Domain, Resource} = _From, #iq{kind = request, type = get,  ns = ?
 							)
 															),
 
-				gen_client:send_packet(Session, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
+				gen_client:send_packet(Client, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
 
 		ok;
 
 
 % Disco#items
-handle2({Acc, Domain, Resource} = _From,  #iq{kind = request, type = get,  ns = ?NS_DISCO_ITEMS, payload = #xmlel{name = 'query', attrs = []}} = IQ, #client_state{session = Session} = ClientState, DiscoModule, DiscoModuleParams) ->
-	Query = exmpp_xml:set_children(?QUERY_ITEMS, DiscoModule:disco_items(DiscoModuleParams, ClientState)),
+handle2({Acc, Domain, Resource} = _From,  #iq{kind = request, type = get,  ns = ?NS_DISCO_ITEMS, payload = #xmlel{name = 'query', attrs = []}} = IQ, Client, DiscoModule, DiscoModuleParams) ->
+	Query = exmpp_xml:set_children(?QUERY_ITEMS, DiscoModule:disco_items(DiscoModuleParams, Client)),
 				Result = 
 					exmpp_iq:iq_to_xmlel(
 							 exmpp_iq:result(IQ, Query
 															 
 							)
 															),
-					gen_client:send_packet(Session, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
+					gen_client:send_packet(Client, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
 
 		ok;
 
 % Disco#items and node
-handle2({Acc, Domain, Resource} = _From,  #iq{kind = request, type = get,  ns = ?NS_DISCO_ITEMS, payload = #xmlel{name = 'query', attrs = [#xmlattr{name = 'node', value = Node}]}} = IQ, #client_state{session = Session} = ClientState, DiscoModule, DiscoModuleParams) ->
-	Items = DiscoModule:disco_items(DiscoModuleParams, ClientState, Node),
+handle2({Acc, Domain, Resource} = _From,  #iq{kind = request, type = get,  ns = ?NS_DISCO_ITEMS, payload = #xmlel{name = 'query', attrs = [#xmlattr{name = 'node', value = Node}]}} = IQ, Client, DiscoModule, DiscoModuleParams) ->
+	Items = DiscoModule:disco_items(DiscoModuleParams, Client, Node),
 	case Items of
 	ignore ->
 		ok;
@@ -119,7 +119,7 @@ handle2({Acc, Domain, Resource} = _From,  #iq{kind = request, type = get,  ns = 
 							 exmpp_iq:result(IQ, Query
 							)
 															),
-					gen_client:send_packet(Session, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
+					gen_client:send_packet(Client, exmpp_stanza:set_recipient(Result, exmpp_jid:make(Acc, Domain, Resource))),
 		ok
 	end;
 

@@ -20,7 +20,9 @@
 				 set_debug/2,
 				 send_sync_packet/3, send_sync_packet/4, 
 				 add_handler/2, 
-				 remove_handler/2]).
+				 remove_handler/2,
+				 add_plugin
+				 ]).
 
 %% 
 -export([get_client_state/1, get_client_jid/1]).
@@ -336,16 +338,25 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%===================================================================
-%%% Internal functions
+%%% API functions
 %%%===================================================================
+
 add_handler(Client, Handler) ->
 	gen_server:call(Client, {add_handler, Handler}).
 
 remove_handler(Client, HandlerId) ->
 	gen_server:call(Client, {remove_handler, HandlerId}).
 
-generateHandlerId(Handler) ->
-	exmpp_utils:random_id("handler."  ++  lists:flatten(io_lib:format("~p::~p", [Handler, self()]))).
+get_client_state(Client) ->
+	gen_server:call(Client, get_client_state).
+
+get_client_jid(Client) ->
+	ClientState = get_client_state(Client),
+	ClientState#client_state.jid.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 create_session(JID, Password, Host, Port, Domain) ->
 	%% Create a new session with basic (digest) authentication:
@@ -358,12 +369,6 @@ create_session(JID, Password, Host, Port, Domain) ->
 	erlang:link(Session),
 	Session.
 
-get_client_state(Client) ->
-	gen_server:call(Client, get_client_state).
-
-get_client_jid(Client) ->
-	ClientState = get_client_state(Client),
-	ClientState#client_state.jid.
 
 add_handler_internal(Handler, EventServer) ->
 	HandlerId = generateHandlerId(Handler),
@@ -437,3 +442,5 @@ is_handler_set(EventServer, HandlerId) ->
 									 Id =:= HandlerId 
 							end, Handlers).
 
+generateHandlerId(Handler) ->
+	exmpp_utils:random_id("handler."  ++  lists:flatten(io_lib:format("~p::~p", [Handler, self()]))).

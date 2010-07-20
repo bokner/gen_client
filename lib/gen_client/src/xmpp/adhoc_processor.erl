@@ -34,11 +34,11 @@
 %% @doc
 %% Starts the adhoc processor
 %% 
-%% @spec start_link(Session, Commands) -> {ok, Pid} | ignore | {error, Error}
+%% @spec start_link(Client, Commands) -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(Session, AdhocModule, AdhocModuleParams) ->
-	gen_server:start_link(?MODULE, [Session, AdhocModule, AdhocModuleParams], []).
+start_link(Client, AdhocModule, AdhocModuleParams) ->
+	gen_server:start_link(?MODULE, [Client, AdhocModule, AdhocModuleParams], []).
 
 stop(Processor) ->
 	gen_server:cast(Processor, stop).
@@ -82,7 +82,7 @@ generate_sessionid(Command) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([Session, AdhocModule, AdhocModuleParams]) ->
+init([Client, AdhocModule, AdhocModuleParams]) ->
 	{ok, #p_state{
 								adhoc_module = AdhocModule,
 								adhoc_module_params = AdhocModuleParams
@@ -103,18 +103,18 @@ init([Session, AdhocModule, AdhocModuleParams]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({execute, Command, CommandSession, DataForm, ClientState}, _From, 
+handle_call({execute, Command, CommandSession, DataForm, Client}, _From, 
 						#p_state{
 										 adhoc_module = AdhocModule,
 										 adhoc_module_params = AdhocModuleParams,										 
 										 command_sessions = CommandSessions} = State) ->
 	io:format("adhocprocessor:Command:~p~n", [Command]),
-	CommandList = AdhocModule:get_adhoc_list(AdhocModuleParams, ClientState),
+	CommandList = AdhocModule:get_adhoc_list(AdhocModuleParams, Client),
 	{value, #command{handler = Handler}} = lists:keysearch(Command, 2, CommandList),
 	
 	% Create new process or find the one assigned to handle this command session
 	SessionProcess = if CommandSession == new orelse CommandSession == "new" ->
-												case Handler:new_session_process(AdhocModuleParams, ClientState) of
+												case Handler:new_session_process(AdhocModuleParams, Client) of
 													{ok, S} -> S;
 													none -> none
 												end;
@@ -126,7 +126,7 @@ handle_call({execute, Command, CommandSession, DataForm, ClientState}, _From,
 												end
 									 end,
 	io:format("P2~n"),
-	R = Handler:execute(SessionProcess, AdhocModuleParams, ClientState, DataForm),
+	R = Handler:execute(SessionProcess, AdhocModuleParams, Client, DataForm),
 	io:format("P3~nExec result:~p~n", [R]),
 	%% Store session if it's new and the command is stateful (i.e. SessionProcess /= none)
 	{NewState, Reply} = if CommandSession == new andalso SessionProcess /= none ->
@@ -139,12 +139,12 @@ handle_call({execute, Command, CommandSession, DataForm, ClientState}, _From,
 	
 	{reply, Reply, NewState};
 
-handle_call({cancel, Command, Sessionid, AdhocModuleParams, ClientState}, _From, 
+handle_call({cancel, Command, Sessionid, AdhocModuleParams, Client}, _From, 
 						#p_state{
 										 adhoc_module = AdhocModule,
 										 adhoc_module_params = AdhocModuleParams,
 										 command_sessions = CommandSessions} = State) ->
-	CommandList = AdhocModule:get_adhoc_list(AdhocModuleParams, ClientState),
+	CommandList = AdhocModule:get_adhoc_list(AdhocModuleParams, Client),
 	{value, #command{handler = Handler}} = lists:keysearch(Command, 2, CommandList),
 	P =  case dict:find(Sessionid, CommandSessions) of
 				 
@@ -152,11 +152,11 @@ handle_call({cancel, Command, Sessionid, AdhocModuleParams, ClientState}, _From,
 					 X;
 				 _Error -> none
 			 end,
-	Handler:cancel(P, AdhocModuleParams, ClientState),
+	Handler:cancel(P, AdhocModuleParams, Client),
 	{reply, ok, State#p_state{command_sessions = dict:erase(Sessionid, State#p_state.command_sessions)}};
 
-handle_call({get_commands, ClientState}, _From, #p_state{adhoc_module = AdhocModule, adhoc_module_params = AdhocModuleParams} = State) ->
-	Reply = AdhocModule:get_adhoc_list(AdhocModuleParams, ClientState),
+handle_call({get_commands, Client}, _From, #p_state{adhoc_module = AdhocModule, adhoc_module_params = AdhocModuleParams} = State) ->
+	Reply = AdhocModule:get_adhoc_list(AdhocModuleParams, Client),
 	{reply, Reply, State};
 
 handle_call(_Request, _From, State) ->
@@ -225,8 +225,9 @@ commands(Processor, ClientState) ->
 	gen_server:call(Processor, {get_commands, ClientState}).
 
 
-command_items(Processor, #client_state{jid = JID} = ClientState) ->
-	Commands = commands(Processor, ClientState), 
+command_items(Processor, Client) ->
+	Commands = commands(Processor, Client), 
+	JID = gen_client:get_client_jid(Client),
 	#xmlel{name = 'query', ns = ?NS_DISCO_ITEMS, attrs = [#xmlattr{name = node, value = ?NS_ADHOC_b}],
 				 children = lists:map(fun(#command{id = Id, name = Name}) ->
 																	 #xmlel{name = "item",
