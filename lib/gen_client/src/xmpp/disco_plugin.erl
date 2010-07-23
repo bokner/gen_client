@@ -7,10 +7,11 @@
 -module(disco_plugin).
 -behaviour(gen_client_plugin).
 -export([init/2, terminate/1, handle/3]).
--export([behaviour_info/1]).
+
 % disco_handler behaviour
 % Return a list of required functions and their arity.
 %
+-export([behaviour_info/1]).
 behaviour_info(callbacks) ->
 	[
 	 {disco_items, 2}, %% "from", arguments
@@ -40,3 +41,4 @@ handle(#received_packet{from = From, packet_type = iq, raw_packet = IQ}, Client,
 %% Ignore non-iq packets
 handle(_, _, _) ->
 	ok.
+

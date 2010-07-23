@@ -28,7 +28,8 @@
 %% 
 -export([get_client_state/1, get_client_jid/1]).
 
-
+%% Helpers
+-export([get_xmlel/1, get_xml/1]).	 
 
 -compile(export_all).
 
@@ -453,3 +454,12 @@ is_handler_set(EventServer, HandlerId) ->
 
 generateHandlerId(Handler) ->
 	exmpp_utils:random_id("handler."  ++  lists:flatten(io_lib:format("~p::~p", [Handler, self()]))).
+
+%% Helpers
+%%
+%% Get xmlel (as defined by exmpp) from the stanza
+get_xmlel(#received_packet{raw_packet = RawPacket}) ->
+	RawPacket.
+
+get_xml(Packet) ->
+	exmpp_xml:document_to_list(get_xmlel(Packet)).

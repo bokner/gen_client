@@ -10,7 +10,7 @@
 %%
 -export([disco_info/2, disco_info/3, disco_items/2, disco_items/3]).
 
--behaviour(disco_handler).
+-behaviour(disco_plugin).
 %%
 %% API Functions
 %%
