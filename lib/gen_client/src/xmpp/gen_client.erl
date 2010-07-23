@@ -21,13 +21,14 @@
 				 send_sync_packet/3, send_sync_packet/4, 
 				 add_handler/2, 
 				 remove_handler/2,
-				 add_plugin
+				 add_plugin/4,
+				 remove_plugin/2
 				 ]).
 
 %% 
 -export([get_client_state/1, get_client_jid/1]).
 
--export([behaviour_info/1]).
+
 
 -compile(export_all).
 
@@ -41,19 +42,8 @@
 % Defaults
 -define(DEFAULT_PRESENCE_MSG, " online.").
 -define(LOGGER_KEY, "logger_handler").
+-define(PLUGIN_KEY(P), atom_to_list(P) ++ "_plugin").
 
-% gen_client behaviour
-% Return a list of required functions and their arity
-behaviour_info(callbacks) ->
-	[
-	 {init, 2}, %% Init gen_client implementation; session and argument list
-	 {terminate, 1}, %% Terminate gen_client implementation; client state
-	 {terminate, 2}, %% Terminate gen_client implementation; module ref and client state	 
-	 {handle, 2},		%% Handle stanza; received packet and client state	
-	 {handle, 3}  	%% Handle stanza; module ref, received packet and client state
-	
-	];
-behaviour_info(_Other) -> undefined.
 
 %%%===================================================================
 %%% API
@@ -213,6 +203,12 @@ handle_call({remove_handler, HandlerId},  _From, State) ->
 	remove_handler_internal(State#client_state.event_server, HandlerId),
 	{reply,  ok, State};
 
+handle_call({add_plugin, Plugin, UserModule, Args}, _From, State) ->
+	{ok, PluginRef} = Plugin:init(UserModule, Args),
+	Handler = fun(Response, Client) -> Plugin:handle(Response, Client, PluginRef) end,
+	add_handler_internal(Handler, State#client_state.event_server, ?PLUGIN_KEY(Plugin), fun() -> Plugin:terminate(PluginRef) end),
+	{reply,  ok, State};
+	
 handle_call(get_client_state, _From, State) ->
 	{reply, State, State};
 
@@ -347,6 +343,16 @@ add_handler(Client, Handler) ->
 remove_handler(Client, HandlerId) ->
 	gen_server:call(Client, {remove_handler, HandlerId}).
 
+add_plugin(Client, Plugin, UserModule, Args) when is_atom(Plugin) ->
+	{ok, PluginRef} = Plugin:init(UserModule, Args),
+	Handler = fun(Response, _Client) -> Plugin:handle(Response, PluginRef) end,
+	gen_server:call(Client, {add_plugin, Plugin, UserModule, Args}).
+
+
+remove_plugin(Client, Plugin) ->
+	%% Remove plugin; the plugin terminator will be called in gen_event:terminate
+	remove_handler(Client, ?PLUGIN_KEY(Plugin)).
+
 get_client_state(Client) ->
 	gen_server:call(Client, get_client_state).
 
@@ -375,10 +381,13 @@ add_handler_internal(Handler, EventServer) ->
 	add_handler_internal(Handler, EventServer, HandlerId).
 
 add_handler_internal(Handler, EventServer, HandlerId) ->
+	add_handler_internal(Handler, EventServer, HandlerId, fun() -> void end).
+	
+add_handler_internal(Handler, EventServer, HandlerId, Terminator) ->
 	case is_handler_set(EventServer, HandlerId) of
 			true -> void;
 			false ->		
-			gen_event:add_handler(EventServer, {gen_client_event_server, HandlerId}, [Handler] )
+			gen_event:add_handler(EventServer, {gen_client_event_server, HandlerId}, [Handler, Terminator] )
 	end,
 	HandlerId.
 

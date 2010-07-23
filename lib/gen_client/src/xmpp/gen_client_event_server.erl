@@ -18,7 +18,7 @@
 %% gen_event callbacks
 -export([init/1, handle_event/2, handle_call/2, handle_info/2, terminate/2, code_change/3]).
 
--record(state, {handler_func}).
+-record(state, {handler_func, termination_func}).
 
 %% ====================================================================
 %% External functions
@@ -33,8 +33,8 @@
 %% Returns: {ok, State}          |
 %%          Other
 %% --------------------------------------------------------------------
-init([HandlerFunc]) ->
-    {ok, #state{handler_func = HandlerFunc}}.
+init([HandlerFunc, TerminationFunc]) ->
+    {ok, #state{handler_func = HandlerFunc, termination_func = TerminationFunc}}.
 
 %% --------------------------------------------------------------------
 %% Func: handle_event/2
@@ -70,8 +70,9 @@ handle_info(_Info, State) ->
 %% Purpose: Shutdown the server
 %% Returns: any
 %% --------------------------------------------------------------------
-terminate(_Reason, _State) ->
-    ok.
+terminate(_Reason, #state{termination_func = TFunc}  = _State) ->
+	erlang:apply(TFunc, []),
+	ok.
 
 %% --------------------------------------------------------------------
 %% Func: code_change/3

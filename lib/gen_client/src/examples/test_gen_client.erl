@@ -10,7 +10,7 @@
 %%
 %% Exported Functions
 %%
--export([test_subscriptions/0]).
+-export([test_subscriptions/0, test_plugins/0]).
 
 %%
 %% API Functions
@@ -42,6 +42,13 @@ test_subscriptions() ->
 %%	gen_client:send_packet(S3, exmpp_client_pubsub:subscribe(ForeignDomainAcc, "pubsub.localhost", "test_node")).
 	ok.
 
+
+test_plugins() ->
+	Acc = "test@localhost",	
+	Password = "test",
+	{ok, Client} = gen_client:start(Acc, "vroc.oksphere.com", 5222, Password, [{debug, true}, {presence, {true, "I'm online."}}]),	
+	gen_client:add_plugin(Client, disco_handler, test_disco, []),
+	ok.
 %%
 %% Local Functions
 %%
