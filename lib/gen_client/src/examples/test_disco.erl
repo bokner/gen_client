@@ -1,4 +1,9 @@
-%%
+%% Author: bokner
+%% Created: May 1, 2010
+%% Description: Example of plugin implementation
+%% The code implements disco_plugin behaviour,
+%% which enables user-defined handling of XEP-0030 requests
+	
 -module(test_disco).
 
 %%
