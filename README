@@ -6,3 +6,10 @@ To build from source, cd to directory where you checkout/untar/unzip gen_client 
 
 erl -make
 
+To run test example:
+
+erl -pa lib/gen_client/ebin
+
+and then from Erlang shell:
+
+1> test_gen_client:test().
