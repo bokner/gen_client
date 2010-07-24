@@ -15,7 +15,7 @@
 % Return a list of required functions and their arity
 behaviour_info(callbacks) ->
 	[
-	 {init, 2}, %% Init plugin; user module and arguments.
+	 {init, 1}, %% Init plugin; argument list.
 	 {terminate, 1}, %% Terminate plugin; plugin reference (module instance or PID).
 	 {handle, 3}	%% Handle stanza; received packet, client PID and plugin reference (module instance or PID).	
 	

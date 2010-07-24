@@ -6,7 +6,7 @@
 %%% -------------------------------------------------------------------
 -module(disco_plugin).
 -behaviour(gen_client_plugin).
--export([init/2, terminate/1, handle/3]).
+-export([init/1, terminate/1, handle/3]).
 
 % disco_handler behaviour
 % Return a list of required functions and their arity.
@@ -27,7 +27,7 @@ behaviour_info(_Other) -> undefined.
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
 
-init(DiscoImpl, DiscoParams) ->
+init([DiscoImpl, DiscoParams]) ->
 	{ok, disco_handler_impl:new(DiscoImpl, DiscoParams)}.
 
 terminate(_DiscoRef) ->

@@ -21,7 +21,7 @@
 				 send_sync_packet/3, send_sync_packet/4, 
 				 add_handler/2, 
 				 remove_handler/2,
-				 add_plugin/4,
+				 add_plugin/3,
 				 remove_plugin/2
 				 ]).
 
@@ -197,15 +197,14 @@ handle_call(login, _From, #client_state{session = Session} = State) ->
 handle_call({add_handler, Handler},  _From, State) ->
 	HandlerId = add_handler_internal(Handler, State#client_state.event_server),
 	{reply,  HandlerId, State};
-
 	
 handle_call({remove_handler, HandlerId},  _From, State) ->
 	io:format("Removing handler ~p~n", [HandlerId]),
 	remove_handler_internal(State#client_state.event_server, HandlerId),
 	{reply,  ok, State};
 
-handle_call({add_plugin, Plugin, UserModule, Args}, _From, State) ->
-	{ok, PluginRef} = Plugin:init(UserModule, Args),
+handle_call({add_plugin, Plugin, Args}, _From, State) ->
+	{ok, PluginRef} = Plugin:init(Args),
 	Handler = fun(Response, Client) -> Plugin:handle(Response, Client, PluginRef) end,
 	add_handler_internal(Handler, State#client_state.event_server, ?PLUGIN_KEY(Plugin), fun() -> Plugin:terminate(PluginRef) end),
 	{reply,  ok, State};
@@ -344,10 +343,8 @@ add_handler(Client, Handler) ->
 remove_handler(Client, HandlerId) ->
 	gen_server:call(Client, {remove_handler, HandlerId}).
 
-add_plugin(Client, Plugin, UserModule, Args) when is_atom(Plugin) ->
-	{ok, PluginRef} = Plugin:init(UserModule, Args),
-	Handler = fun(Response, _Client) -> Plugin:handle(Response, PluginRef) end,
-	gen_server:call(Client, {add_plugin, Plugin, UserModule, Args}).
+add_plugin(Client, Plugin, Args) when is_atom(Plugin) ->
+	gen_server:call(Client, {add_plugin, Plugin, Args}).
 
 
 remove_plugin(Client, Plugin) ->
