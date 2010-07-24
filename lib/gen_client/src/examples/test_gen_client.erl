@@ -17,14 +17,18 @@
 %%
 test() ->
 
-	{ok, Client1} = gen_client:start("gen_client@jabber.ru/1", "jabber.ru", 5222, "test", [{debug, true}, {presence, {true, "I'm online."}}, {reconnect, 15000}]),	
+	{ok, Client1} = gen_client:start("gen_client@jabber.ru", "jabber.ru", 5222, "test", [{debug, true}, {presence, {true, "I'm online."}}, {reconnect, 15000}]),	
 	gen_client:add_plugin(Client1, disco_plugin, [test_disco, []]),
   %% Log in with 2nd client and send discovery request to 1st client
-	{ok, Client2} = gen_client:start("gen_client2@jabber.ru/2", "jabber.ru", 5222, "test", [{debug, true}, {presence, {true, "I'm online."}}, {reconnect, 15000}]),
+	{ok, Client2} = gen_client:start("gen_client2@jabber.ru", "jabber.ru", 5222, "test", [{debug, true}, {presence, {true, "I'm online."}}, {reconnect, 15000}]),
 
-	{ok, Info} = gen_client:send_sync_packet(Client2, exmpp_client_disco:info("gen_client@jabber.ru/1"), 10000),
+	%% We want to know what resource the first client was assigned, as disco requests should be sent to a particular resource
+	Jid1 = gen_client:get_client_jid(Client1),
+	%% We need to convert it to string to comply with exmpp_client_disco calls 
+	Jid1Str = exmpp_jid:to_list(Jid1),
+	{ok, Info} = gen_client:send_sync_packet(Client2, exmpp_client_disco:info(Jid1Str), 10000),
 	io:format("Disco info from gen_client:~p~n", [gen_client:get_xml(Info)]),
-	{ok, Items} = gen_client:send_sync_packet(Client2, exmpp_client_disco:items("gen_client@jabber.ru/1"), 10000),
+	{ok, Items} = gen_client:send_sync_packet(Client2, exmpp_client_disco:items(Jid1Str), 10000),
 	io:format("Disco items from gen_client:~p~n", [gen_client:get_xml(Items)]),	
 	ok.
 %%
