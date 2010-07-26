@@ -90,13 +90,13 @@ shell_command(Dir, Command) ->
 				{Port, {data, Data}} ->
 								Data
 				 after 1000 ->
-								 "timeout"
+								 <<"timeout">>
 		end,
 		try
 				port_close(Port),
 				D
-		catch Exc:Reason ->
-							 "Exception on command attempt"
+		catch _Exc:_Reason ->
+							 <<"Exception on command attempt">>
 		end.
 
 any_to_binary(Value) ->
