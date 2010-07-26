@@ -18,7 +18,7 @@
 %%
 %% API Functions
 %%
-commands(Requester, Arguments) ->
+commands(_Requester, _Arguments) ->
 		[
 		 #command{id = <<"env_info_command">>, name = <<"Environment Info">>, 
 							handler = env_info_command},
