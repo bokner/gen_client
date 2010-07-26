@@ -5,7 +5,7 @@
 
 -module(test_adhoc).
 
--behaviour(disco_plugin).
+-behaviour(adhoc_plugin).
 %%
 %% Include files
 %%
