@@ -10,17 +10,18 @@
 %%
 %% Exported Functions
 %%
--export([test/0]).
+-export([test/0, test_adhoc/0]).
 
 %%
 %% API Functions
 %%
 test() ->
-
-	{ok, Client1} = gen_client:start("gen_client@jabber.ru", "jabber.ru", 5222, "test", [{debug, true}, {presence, {true, "I'm online."}}, {reconnect, 15000}]),	
+	{ok, Client1} = gen_client:start("gen_client@jabber.ru", "jabber.ru", 5222, "test", 
+																	 [{debug, true}, {presence, {true, "I'm online."}}, {reconnect, 15000}]),	
 	gen_client:add_plugin(Client1, disco_plugin, [test_disco, []]),
   %% Log in with 2nd client and send discovery request to 1st client
-	{ok, Client2} = gen_client:start("gen_client2@jabber.ru", "jabber.ru", 5222, "test", [{debug, true}, {presence, {true, "I'm online."}}, {reconnect, 15000}]),
+	{ok, Client2} = gen_client:start("gen_client2@jabber.ru", "jabber.ru", 5222, "test", 
+																	 [{debug, true}, {presence, {true, "I'm online."}}, {reconnect, 15000}]),
 
 	%% We want to know what resource the first client was assigned, as disco requests should be sent to a particular resource
 	Jid1 = gen_client:get_client_jid(Client1),
@@ -31,6 +32,15 @@ test() ->
 	{ok, Items} = gen_client:send_sync_packet(Client2, exmpp_client_disco:items(Jid1Str), 10000),
 	io:format("Disco items from gen_client:~p~n", [gen_client:get_xml(Items)]),	
 	ok.
+
+test_adhoc() ->
+	{ok, Client1} = gen_client:start("test@localhost", "vroc.oksphere.com", 5222, "test", 
+																	 [{debug, true}, {presence, {true, "test account is online."}}, {reconnect, 15000}]),	
+	gen_client:add_plugin(Client1, disco_plugin, [test_disco, []]),
+	gen_client:add_plugin(Client1, adhoc_plugin, [test_adhoc, []]).
+	
+
+ 
 %%
 %% Local Functions
 %%

@@ -27,7 +27,8 @@ disco_info(_From, _Args) ->
 				node='unit'
         name='~s'></identity>", [gen_client_utils:get_MAC()]),
 		    "<feature var='jabber:iq:time'/>",
-		    "<feature var='jabber:iq:version'/>"
+		    "<feature var='jabber:iq:version'/>",
+			  "<feature var='http://jabber.org/protocol/commands'/>"
 			]).
 
 

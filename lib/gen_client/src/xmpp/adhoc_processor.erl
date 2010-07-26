@@ -10,7 +10,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/3, stop/1, execute/5, generate_sessionid/1, cancel/4, command_items/2]).
+-export([start_link/2, stop/1, execute/5, generate_sessionid/1, cancel/4, command_items/3]).
 -export([field_from_dataform/2, fields_from_dataform/1, fields_to_dataform/1]).
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -34,32 +34,32 @@
 %% @doc
 %% Starts the adhoc processor
 %% 
-%% @spec start_link(Client, Commands) -> {ok, Pid} | ignore | {error, Error}
+%% @spec start_link(AdhocModule, AdhocParams) -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(Client, AdhocModule, AdhocModuleParams) ->
-	gen_server:start_link(?MODULE, [Client, AdhocModule, AdhocModuleParams], []).
+start_link(AdhocModule, AdhocModuleParams) ->
+	gen_server:start_link(?MODULE, [AdhocModule, AdhocModuleParams], []).
 
 stop(Processor) ->
 	gen_server:cast(Processor, stop).
 
-execute(Processor, Command, CommandSession, DataForm, ClientState) ->
+execute(Processor, Command, CommandSession, DataForm, Requester) ->
 	Sessionid = case is_binary(CommandSession) of
 								true ->
 									binary_to_list(CommandSession);
 								false ->
 									CommandSession
 							end,
-	gen_server:call(Processor, {execute, Command, Sessionid, DataForm, ClientState}).
+	gen_server:call(Processor, {execute, Command, Sessionid, DataForm, Requester}).
 
-cancel(Processor, Command, CommandSession, ClientState) ->
+cancel(Processor, Command, CommandSession, Requester) ->
 	Sessionid = case is_binary(CommandSession) of
 								true ->
 									binary_to_list(CommandSession);
 								false ->
 									CommandSession
 							end,
-	gen_server:call(Processor, {cancel, Command, Sessionid, ClientState}).
+	gen_server:call(Processor, {cancel, Command, Sessionid, Requester}).
 
 
 generate_sessionid(Command) ->
@@ -82,7 +82,7 @@ generate_sessionid(Command) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([Client, AdhocModule, AdhocModuleParams]) ->
+init([AdhocModule, AdhocModuleParams]) ->
 	{ok, #p_state{
 								adhoc_module = AdhocModule,
 								adhoc_module_params = AdhocModuleParams
@@ -103,18 +103,18 @@ init([Client, AdhocModule, AdhocModuleParams]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({execute, Command, CommandSession, DataForm, Client}, _From, 
+handle_call({execute, Command, CommandSession, DataForm, Requester}, _From, 
 						#p_state{
 										 adhoc_module = AdhocModule,
 										 adhoc_module_params = AdhocModuleParams,										 
 										 command_sessions = CommandSessions} = State) ->
 	io:format("adhocprocessor:Command:~p~n", [Command]),
-	CommandList = AdhocModule:get_adhoc_list(AdhocModuleParams, Client),
+	CommandList = AdhocModule:commands(Requester, AdhocModuleParams),
 	{value, #command{handler = Handler}} = lists:keysearch(Command, 2, CommandList),
 	
 	% Create new process or find the one assigned to handle this command session
 	SessionProcess = if CommandSession == new orelse CommandSession == "new" ->
-												case Handler:new_session_process(AdhocModuleParams, Client) of
+												case Handler:new_session_process(AdhocModuleParams, Requester) of
 													{ok, S} -> S;
 													none -> none
 												end;
@@ -126,7 +126,7 @@ handle_call({execute, Command, CommandSession, DataForm, Client}, _From,
 												end
 									 end,
 	io:format("P2~n"),
-	R = Handler:execute(SessionProcess, AdhocModuleParams, Client, DataForm),
+	R = Handler:execute(SessionProcess, AdhocModuleParams, DataForm, Requester),
 	io:format("P3~nExec result:~p~n", [R]),
 	%% Store session if it's new and the command is stateful (i.e. SessionProcess /= none)
 	{NewState, Reply} = if CommandSession == new andalso SessionProcess /= none ->
@@ -139,24 +139,23 @@ handle_call({execute, Command, CommandSession, DataForm, Client}, _From,
 	
 	{reply, Reply, NewState};
 
-handle_call({cancel, Command, Sessionid, AdhocModuleParams, Client}, _From, 
+handle_call({cancel, Command, Sessionid, AdhocModuleParams, Requester}, _From, 
 						#p_state{
 										 adhoc_module = AdhocModule,
 										 adhoc_module_params = AdhocModuleParams,
 										 command_sessions = CommandSessions} = State) ->
-	CommandList = AdhocModule:get_adhoc_list(AdhocModuleParams, Client),
+	CommandList = AdhocModule:get_adhoc_list(Requester, AdhocModuleParams),
 	{value, #command{handler = Handler}} = lists:keysearch(Command, 2, CommandList),
-	P =  case dict:find(Sessionid, CommandSessions) of
-				 
+	P =  case dict:find(Sessionid, CommandSessions) of				 
 				 {ok, X} ->
 					 X;
 				 _Error -> none
 			 end,
-	Handler:cancel(P, AdhocModuleParams, Client),
+	Handler:cancel(P),
 	{reply, ok, State#p_state{command_sessions = dict:erase(Sessionid, State#p_state.command_sessions)}};
 
-handle_call({get_commands, Client}, _From, #p_state{adhoc_module = AdhocModule, adhoc_module_params = AdhocModuleParams} = State) ->
-	Reply = AdhocModule:get_adhoc_list(AdhocModuleParams, Client),
+handle_call({get_commands, Requester}, _From, #p_state{adhoc_module = AdhocModule, adhoc_module_params = AdhocModuleParams} = State) ->
+	Reply = AdhocModule:commands(Requester, AdhocModuleParams),
 	{reply, Reply, State};
 
 handle_call(_Request, _From, State) ->
@@ -221,20 +220,18 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-commands(Processor, ClientState) ->
-	gen_server:call(Processor, {get_commands, ClientState}).
+commands(Processor, Requester) ->
+	gen_server:call(Processor, {get_commands, Requester}).
 
-
-command_items(Processor, Client) ->
-	Commands = commands(Processor, Client), 
-	JID = gen_client:get_client_jid(Client),
+command_items(Processor, Requester, Jid) ->
+	Commands = commands(Processor, Requester), 
 	#xmlel{name = 'query', ns = ?NS_DISCO_ITEMS, attrs = [#xmlattr{name = node, value = ?NS_ADHOC_b}],
 				 children = lists:map(fun(#command{id = Id, name = Name}) ->
 																	 #xmlel{name = "item",
 																					attrs = [
 																									 #xmlattr{name = node, value = Id},
 																									 #xmlattr{name = name, value = Name},
-																									 #xmlattr{name = jid, value = exmpp_jid:to_binary(JID)}
+																									 #xmlattr{name = jid, value = exmpp_jid:to_binary(Jid)}
 																									]
 																				 } end, Commands)}.
 

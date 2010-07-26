@@ -12,7 +12,7 @@
 -behaviour(gen_fsm).
 -behaviour(gen_command).
 
--export([new_session_process/2, execute/4, cancel/3]).
+-export([new_session_process/2, execute/4, cancel/1]).
 
 -compile(export_all).
 
@@ -33,13 +33,13 @@
 -record(p_state, {dir = "."}).
 
 %%% gen_command
-new_session_process(_AdhocModuleParams, _ClientState) ->
+new_session_process(_AdhocModuleParams, _Requester) ->
 		start_link().
 
-execute(SessionProcess, _AdhocModuleParams, _ClientState, DataForm) ->
+execute(SessionProcess, _AdhocModuleParams, DataForm, _Requester) ->
 		gen_fsm:sync_send_event(SessionProcess, {execute, DataForm}).
 
-cancel(SessionProcess, _AdhocModuleParams, _ClientState) ->
+cancel(SessionProcess) ->
 		gen_fsm:send_all_state_event(SessionProcess, cancel).
 
 
@@ -284,7 +284,8 @@ output_form(Output) ->
 																										#xmlcdata{cdata = list_to_binary(L)}]}
 																						]}
 									end,
-									string:tokens(Output, "\n")),
+									%% Not very eficient, just a quick fix (better parsing binary)...
+									string:tokens(binary_to_list(Output), "\n")),
 
 				OutputForm = #xmlel{name = 'x', ns = 'jabber:x:data', attrs = [#xmlattr{name = type, value = <<"result">>}],
 											 children = [
