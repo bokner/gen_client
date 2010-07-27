@@ -120,9 +120,8 @@ send_sync_packet(Client, Packet, Trigger, Timeout) ->
 	remove_handler(Client, HandlerId),	
 	R.		
 
-
 %%
-%% The default sync Trigger  is "match response and request by id".
+%% The default sync Trigger  is "match response and request by id" function.
 %% We need to know or create original id first.
 %%
 send_sync_packet(Client, Packet, Timeout) ->

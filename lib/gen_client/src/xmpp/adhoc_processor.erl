@@ -108,7 +108,6 @@ handle_call({execute, Command, CommandSession, DataForm, Requester}, _From,
 										 adhoc_module = AdhocModule,
 										 adhoc_module_params = AdhocModuleParams,										 
 										 command_sessions = CommandSessions} = State) ->
-	io:format("adhocprocessor:Command:~p~n", [Command]),
 	CommandList = AdhocModule:commands(Requester, AdhocModuleParams),
 	{value, #command{handler = Handler}} = lists:keysearch(Command, 2, CommandList),
 	
@@ -125,9 +124,7 @@ handle_call({execute, Command, CommandSession, DataForm, Requester}, _From,
 													Error -> throw(Error)
 												end
 									 end,
-	io:format("P2~n"),
 	R = Handler:execute(SessionProcess, AdhocModuleParams, DataForm, Requester),
-	io:format("P3~nExec result:~p~n", [R]),
 	%% Store session if it's new and the command is stateful (i.e. SessionProcess /= none)
 	{NewState, Reply} = if CommandSession == new andalso SessionProcess /= none ->
 													 NewSessionid = adhoc_processor:generate_sessionid(Command),
