@@ -50,7 +50,7 @@ execute(Processor, Command, CommandSession, DataForm, Requester) ->
 								false ->
 									CommandSession
 							end,
-	gen_server:call(Processor, {execute, Command, Sessionid, DataForm, Requester}).
+	gen_server:call(Processor, {execute, Command, Sessionid, DataForm, Requester}, 30000).
 
 cancel(Processor, Command, CommandSession, Requester) ->
 	Sessionid = case is_binary(CommandSession) of
@@ -125,15 +125,18 @@ handle_call({execute, Command, CommandSession, DataForm, Requester}, _From,
 												end
 									 end,
 	R = Handler:execute(SessionProcess, AdhocModuleParams, DataForm, Requester),
+	io:format("Result of command is:~p~n", [R]),
+
 	%% Store session if it's new and the command is stateful (i.e. SessionProcess /= none)
-	{NewState, Reply} = if CommandSession == new andalso SessionProcess /= none ->
+	{NewState, Reply} = if (CommandSession == new orelse CommandSession == "new")
+													 andalso SessionProcess /= none ->
 													 NewSessionid = adhoc_processor:generate_sessionid(Command),
 													 {State#p_state{command_sessions = dict:store(NewSessionid, SessionProcess, State#p_state.command_sessions)},
 																				 R#command_result{sessionid = NewSessionid, id = Command}};
 												 true ->
 													 {State, R#command_result{sessionid = CommandSession, id = Command}}
 											end,
-	
+	io:format("handle_call reply is ~p~n", [Reply]),
 	{reply, Reply, NewState};
 
 handle_call({cancel, Command, Sessionid, AdhocModuleParams, Requester}, _From, 
@@ -141,7 +144,7 @@ handle_call({cancel, Command, Sessionid, AdhocModuleParams, Requester}, _From,
 										 adhoc_module = AdhocModule,
 										 adhoc_module_params = AdhocModuleParams,
 										 command_sessions = CommandSessions} = State) ->
-	CommandList = AdhocModule:get_adhoc_list(Requester, AdhocModuleParams),
+	CommandList = AdhocModule:commands(Requester, AdhocModuleParams),
 	{value, #command{handler = Handler}} = lists:keysearch(Command, 2, CommandList),
 	P =  case dict:find(Sessionid, CommandSessions) of				 
 				 {ok, X} ->

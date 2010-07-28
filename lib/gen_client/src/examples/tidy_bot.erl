@@ -9,7 +9,6 @@
 %% Include files
 %%
 -include_lib("exmpp/include/exmpp_client.hrl").
--include("gen_client.hrl").
 %%
 %% Exported Functions
 %%
@@ -18,9 +17,10 @@
 %% API Functions
 %%
 tidy_subscriptions(Jid, Password, Host, Port, PubSub) ->
-	{ok, Session} = gen_client:start(Jid, Host, Port, Password, [{module, dummy_client, ["On tidy duty"]}, {reconnect, 15000}]),
+	{ok, Session} = gen_client:start(Jid, Host, Port, Password, [{presence, {true, "On tidy duty"}}, {reconnect, 15000}]),
+	BotJid = gen_client:get_client_jid(Session),
 	JidOfflineHandler = 
-		fun(#received_packet{packet_type = presence, type_attr = "unavailable", from = PeerJid}, #client_state{jid = BotJid} = _State) when BotJid /= PeerJid ->
+		fun(#received_packet{packet_type = presence, type_attr = "unavailable", from = PeerJid}, _Session) when BotJid /= PeerJid ->
 				 {Node, Domain, _Resource} = PeerJid,	
 				 case exmpp_jid:bare_compare(BotJid, exmpp_jid:make(Node, Domain)) of
 					 false ->
