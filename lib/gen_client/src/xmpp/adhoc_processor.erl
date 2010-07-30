@@ -22,7 +22,7 @@
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
--include("gen_client.hrl").
+-include("ad_hoc.hrl").
 
 -record(p_state, {adhoc_module, adhoc_module_params,  command_sessions = dict:new()}).
 

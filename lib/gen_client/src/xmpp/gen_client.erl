@@ -194,7 +194,22 @@ handle_call(login, _From, #client_state{session = Session} = State) ->
 	Reply = login_internal(Session),
 	{reply, Reply, State};
 
+handle_call({add_handler, Handler, HandlerKey},  _From, #client_state{handlers = Handlers} = State) ->
+	NewHandlers = orddict:store(HandlerKey, Handler, Handlers),
+	{reply, ok, State#client_state{handlers = NewHandlers}};
 
+handle_call({add_plugin, Plugin, Args}, _From, #client_state{handlers = Handlers} = State) ->
+	{ok, PluginRef} = Plugin:init(Args),
+	Handler = fun(Response, Client) -> Plugin:handle(Response, Client, PluginRef) end,
+	HandlerKey = ?PLUGIN_KEY(Plugin),
+	Terminator = fun() -> Plugin:terminate(PluginRef) end,
+	NewHandlers = orddict:store(HandlerKey, {Handler, Terminator}, Handlers),
+	{reply, ok, State#client_state{handlers = NewHandlers}};
+
+handle_call({remove_handler, HandlerKey}, _From, #client_state{handlers = Handlers} = State) ->
+	io:format("Removing handler ~p~n", [HandlerKey]),
+	NewHandlers = orddict:erase(HandlerKey, Handlers),
+	{reply, ok, State#client_state{handlers = NewHandlers}};
 
 handle_call(get_client_state, _From, State) ->
 	{reply, State, State};
@@ -217,23 +232,6 @@ handle_cast({send_packet, Packet}, #client_state{session = Session} = State) ->
 	io:format("Outgoing:~p~n", [exmpp_xml:document_to_list(Packet)]),
 	spawn(fun() -> exmpp_session:send_packet(Session, Packet) end),
 	{noreply, State};	
-
-handle_cast({add_handler, Handler, HandlerKey},  #client_state{handlers = Handlers} = State) ->
-	NewHandlers = orddict:store(HandlerKey, Handler, Handlers),
-	{noreply, State#client_state{handlers = NewHandlers}};
-
-handle_cast({add_plugin, Plugin, Args}, #client_state{handlers = Handlers} = State) ->
-	{ok, PluginRef} = Plugin:init(Args),
-	Handler = fun(Response, Client) -> Plugin:handle(Response, Client, PluginRef) end,
-	HandlerKey = ?PLUGIN_KEY(Plugin),
-	Terminator = fun() -> Plugin:terminate(PluginRef) end,
-	NewHandlers = orddict:store(HandlerKey, {Handler, Terminator}, Handlers),
-	{noreply, State#client_state{handlers = NewHandlers}};
-
-handle_cast({remove_handler, HandlerKey}, #client_state{handlers = Handlers} = State) ->
-	io:format("Removing handler ~p~n", [HandlerKey]),
-	NewHandlers = orddict:erase(HandlerKey, Handlers),
-	{noreply,  State#client_state{handlers = NewHandlers}};
 
 handle_cast(stop, #client_state{session = Session, handlers = Handlers} = State) ->
 	exmpp_session:stop(Session),
@@ -360,23 +358,24 @@ code_change(_OldVsn, State, _Extra) ->
 
 add_handler(Client, Handler) ->
 	HandlerId = generateHandlerId(Handler),
-	add_handler(Client, Handler, HandlerId).
+	add_handler(Client, Handler, HandlerId),
+	HandlerId.
 
 add_handler(Client, Handler, HandlerId) when is_tuple(Handler) ->
-	gen_server:cast(Client, {add_handler, Handler, HandlerId});
+	gen_server:call(Client, {add_handler, Handler, HandlerId});
 
 add_handler(Client, HandlerFunc, HandlerId) ->
 	add_handler(Client, {HandlerFunc, fun() -> void end}, HandlerId).
 
 remove_handler(Client, HandlerId) ->
-	gen_server:cast(Client, {remove_handler, HandlerId}).
+	gen_server:call(Client, {remove_handler, HandlerId}).
 
 add_plugin(Client, Plugin, Args) when is_atom(Plugin) ->
-	gen_server:cast(Client, {add_plugin, Plugin, Args}).
+	gen_server:call(Client, {add_plugin, Plugin, Args}).
 
 
 remove_plugin(Client, Plugin) ->
-	%% Remove plugin; the plugin terminator will be called in gen_event:terminate
+	%% Remove plugin
 	remove_handler(Client, ?PLUGIN_KEY(Plugin)).
 
 get_client_state(Client) ->
@@ -401,17 +400,12 @@ create_session(JID, Password, Host, Port, Domain) ->
 	erlang:link(Session),
 	Session.
 
-
-remove_handler_internal(EventServer, HandlerId) ->
-	gen_event:delete_handler(EventServer, {gen_client_event_server, HandlerId}, []).
-
 login_internal(Session) ->
 	try exmpp_session:login(Session)
 	catch
 		throw:T ->
 			T
 	end.
-
 
 startup_script(Options) ->
 	Client = self(),
@@ -426,7 +420,7 @@ startup_script(Options) ->
 							 false ->
 								 VoidFun
 						 end,
-	IsPresence = proplists:get_value(presence, Options, false),
+	IsPresence = proplists:get_value(presence, Options, true),
 	PFun = 
 		fun(Msg) -> gen_client:send_packet(Client, stanza:available(Msg)) end,
 	PresenceFun = case IsPresence of
@@ -455,12 +449,6 @@ set_debug(Client, TrueFalse) ->
 
 log_packet(#received_packet{raw_packet = Packet} = _Received) -> 
 	io:format("Incoming:~p~n", [exmpp_xml:document_to_list(Packet)]).
-
-is_handler_set(EventServer, HandlerId) ->
-	Handlers = gen_event:which_handlers(EventServer),		
-	lists:any(fun({gen_client_event_server, Id}) -> 
-								 Id =:= HandlerId 
-						end, Handlers).
 
 generateHandlerId(Handler) ->
 	exmpp_utils:random_id("handler."  ++  lists:flatten(io_lib:format("~p::~p", [Handler, self()]))).

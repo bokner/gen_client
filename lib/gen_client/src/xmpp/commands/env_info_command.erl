@@ -16,7 +16,7 @@
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
--include("gen_client.hrl").
+-include("ad_hoc.hrl").
 
 % No process is created for handling the command
 new_session_process(_AdhocModuleParams, _ClientState) ->

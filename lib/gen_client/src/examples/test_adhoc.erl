@@ -9,7 +9,7 @@
 %%
 %% Include files
 %%
--include("gen_client.hrl").
+-include("ad_hoc.hrl").
 %%
 %% Exported Functions
 %%

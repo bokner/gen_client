@@ -17,8 +17,6 @@
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
--include("gen_client.hrl").
-
 -define(QUERY_INFO,
 				#xmlel{ns = ?NS_DISCO_INFO, name = 'query'}
 			 ).

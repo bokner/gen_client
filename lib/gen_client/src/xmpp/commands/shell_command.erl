@@ -16,7 +16,7 @@
 
 -compile(export_all).
 
--include("gen_client.hrl").
+-include("ad_hoc.hrl").
 
 -include_lib("exmpp/include/exmpp_nss.hrl").
 -include_lib("exmpp/include/exmpp_xml.hrl").
