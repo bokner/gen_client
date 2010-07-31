@@ -168,12 +168,13 @@ init([JID, Password, Host, Port, Options]) ->
 
 init([JID, Password, Host, Port, Domain, Options] = _Args) ->
 	Session = create_session(JID, Password, Host, Port, Domain),
+	startup_script(Options),
 	{ok, #client_state{jid = JID,
 										 session = Session,
 										 args = [JID, Password, Host, Port, Domain],
 										 options = Options,
 										 handlers = orddict:new()	
-										}, 0
+										}
 	}.
 
 %%--------------------------------------------------------------------
@@ -234,8 +235,6 @@ handle_cast({send_packet, Packet}, #client_state{session = Session} = State) ->
 	{noreply, State};	
 
 handle_cast(stop, #client_state{session = Session, handlers = Handlers} = State) ->
-	exmpp_session:stop(Session),
-	orddict:filter(fun(_Key, {_Handler, Terminator}) -> erlang:apply(Terminator, []), false end, Handlers),
 	{stop, normal, State};
 
 handle_cast({set_debug, true}, #client_state{handlers = Handlers} = State) ->
@@ -265,8 +264,7 @@ handle_cast(_Request, State) ->
 %%--------------------------------------------------------------------
 
 %% This is called immediately after init() is finished.
-handle_info(timeout, #client_state{options = Options} = State) ->
-	startup_script(Options),
+handle_info(timeout, State) ->
 	process_flag(trap_exit, true),
 	{noreply, State};
 
@@ -338,7 +336,10 @@ handle_info(Msg, _State) ->
 %% @spec terminate(Reason, State) -> void()
 %% @end
 %%--------------------------------------------------------------------
-terminate(_Reason, _State) ->
+terminate(Reason, #client_state{jid = Jid, session = Session, handlers = Handlers} = _State) ->
+	io:format("Terminating ~p with reason ~p~n", [Jid, Reason]),
+	exmpp_session:stop(Session),
+	orddict:filter(fun(_Key, {_Handler, Terminator}) -> erlang:apply(Terminator, []), false end, Handlers),	
 	ok.
 
 %%--------------------------------------------------------------------
@@ -440,7 +441,7 @@ startup_script(Options) ->
 									%% Script is a function that takes a single Client parameter
 									fun() -> Script(Client) end
 							end,	
-	spawn(fun() -> DebugFun(), LoginFun(), PresenceFun(), ScriptFun() end).
+	spawn_link(fun() -> DebugFun(), LoginFun(), PresenceFun(), ScriptFun() end).
 
 
 %% Add/remove logging
