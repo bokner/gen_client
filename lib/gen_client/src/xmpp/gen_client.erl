@@ -20,8 +20,10 @@
 				 set_debug/2,
 				 send_sync_packet/3, send_sync_packet/4, 
 				 add_handler/2, 
+				 add_handler/3,
 				 remove_handler/2,
 				 add_plugin/3,
+				 add_plugin/4,
 				 remove_plugin/2
 				]).
 
@@ -43,8 +45,11 @@
 
 % Defaults
 -define(DEFAULT_PRESENCE_MSG, " online.").
--define(LOGGER_KEY, {0, "logger_handler"}).
--define(PLUGIN_KEY(P), {2, atom_to_list(P) ++ "_plugin"}).
+-define(LOGGER_KEY, "logger_handler").
+-define(SYSTEM_HANDLER, 0).
+-define(TEMPORARY_HANDLER, 1).
+-define(DEFAULT_PRIORITY, 2).
+-define(PLUGIN_KEY(P), atom_to_list(P) ++ "_plugin").
 
 
 %%%===================================================================
@@ -107,8 +112,8 @@ send_sync_packet(Client, Packet, Trigger, Timeout) ->
 											ok
 									end
 						 end,
-	HandlerKey = {1, generateHandlerId(Callback)},
-	add_handler(Client, Callback, HandlerKey),
+	HandlerId = generateHandlerId(Callback),
+	HandlerKey = add_handler(Client, Callback, HandlerId, ?TEMPORARY_HANDLER),
 	%% ...send the packet...
 	send_packet(Client, Packet),
 	%% ...and wait for response (it should come from controlling process)
@@ -195,17 +200,18 @@ handle_call(login, _From, #client_state{session = Session} = State) ->
 	Reply = login_internal(Session),
 	{reply, Reply, State};
 
-handle_call({add_handler, Handler, HandlerKey},  _From, #client_state{handlers = Handlers} = State) ->
+handle_call({add_handler, Handler, HandlerId, Priority},  _From, #client_state{handlers = Handlers} = State) ->
+	HandlerKey = {Priority, HandlerId},
 	NewHandlers = orddict:store(HandlerKey, Handler, Handlers),
-	{reply, ok, State#client_state{handlers = NewHandlers}};
+	{reply, HandlerKey, State#client_state{handlers = NewHandlers}};
 
-handle_call({add_plugin, Plugin, Args}, _From, #client_state{handlers = Handlers} = State) ->
+handle_call({add_plugin, Plugin, Args, Priority}, _From, #client_state{handlers = Handlers} = State) ->
 	{ok, PluginRef} = Plugin:init(Args),
 	Handler = fun(Response, Client) -> Plugin:handle(Response, Client, PluginRef) end,
-	HandlerKey = ?PLUGIN_KEY(Plugin),
+	HandlerKey = {Priority, ?PLUGIN_KEY(Plugin)},
 	Terminator = fun() -> Plugin:terminate(PluginRef) end,
 	NewHandlers = orddict:store(HandlerKey, {Handler, Terminator}, Handlers),
-	{reply, ok, State#client_state{handlers = NewHandlers}};
+	{reply, HandlerKey, State#client_state{handlers = NewHandlers}};
 
 handle_call({remove_handler, HandlerKey}, _From, #client_state{handlers = Handlers} = State) ->
 	io:format("Removing handler ~p~n", [HandlerKey]),
@@ -238,14 +244,14 @@ handle_cast(stop, #client_state{session = Session, handlers = Handlers} = State)
 	{stop, normal, State};
 
 handle_cast({set_debug, true}, #client_state{handlers = Handlers} = State) ->
-	HandlerKey = ?LOGGER_KEY,
+	HandlerKey = {?SYSTEM_HANDLER, ?LOGGER_KEY},
 	Handler = fun(Received, _State) -> log_packet(Received) end,
 	NewHandlers = orddict:store(HandlerKey, {Handler, fun() -> void end}, Handlers),
 	{noreply, State#client_state{handlers = NewHandlers}};
 
 
 handle_cast({set_debug, false}, #client_state{handlers = Handlers} = State) ->
-	NewHandlers = orddict:erase(?LOGGER_KEY, Handlers),
+	NewHandlers = orddict:erase({?SYSTEM_HANDLER, ?LOGGER_KEY}, Handlers),
 	{noreply, State#client_state{handlers = NewHandlers}};
 
 handle_cast(_Request, State) ->
@@ -356,28 +362,33 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-
 add_handler(Client, Handler) ->
 	HandlerId = generateHandlerId(Handler),
-	add_handler(Client, Handler, HandlerId),
-	HandlerId.
+	Priority = ?DEFAULT_PRIORITY,
+	add_handler(Client, Handler, HandlerId, Priority).
 
-add_handler(Client, Handler, HandlerId) when is_tuple(Handler) ->
-	gen_server:call(Client, {add_handler, Handler, HandlerId});
+add_handler(Client, Handler, Priority) ->
+	HandlerId = generateHandlerId(Handler),
+	add_handler(Client, Handler, HandlerId, Priority).
+	
+add_handler(Client, Handler, HandlerId, Priority) when is_tuple(Handler) ->
+	gen_server:call(Client, {add_handler, Handler, HandlerId, Priority});
 
-add_handler(Client, HandlerFunc, HandlerId) ->
-	add_handler(Client, {HandlerFunc, fun() -> void end}, HandlerId).
+add_handler(Client, HandlerFunc, HandlerId, Priority) when is_function(HandlerFunc)->
+	add_handler(Client, {HandlerFunc, fun() -> void end}, HandlerId, Priority).
 
-remove_handler(Client, HandlerId) ->
-	gen_server:call(Client, {remove_handler, HandlerId}).
+remove_handler(Client, HandlerKey) ->
+	gen_server:call(Client, {remove_handler, HandlerKey}).
 
 add_plugin(Client, Plugin, Args) when is_atom(Plugin) ->
-	gen_server:call(Client, {add_plugin, Plugin, Args}).
+	add_plugin(Client, Plugin, Args, ?DEFAULT_PRIORITY).
 
+add_plugin(Client, Plugin, Args, Priority) when is_atom(Plugin) ->
+	gen_server:call(Client, {add_plugin, Plugin, Args, Priority}).
 
-remove_plugin(Client, Plugin) ->
+remove_plugin(Client, PluginKey) ->
 	%% Remove plugin
-	remove_handler(Client, ?PLUGIN_KEY(Plugin)).
+	remove_handler(Client, PluginKey).
 
 get_client_state(Client) ->
 	gen_server:call(Client, get_client_state).
