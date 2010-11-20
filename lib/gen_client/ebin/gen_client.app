@@ -2,7 +2,7 @@
 %% application.
 {application, gen_client, 
   [{description, "Generic XMPP client library"},
-   {vsn, "0.9.13"},
+   {vsn, "0.9.14"},
    {modules, [gen_client_app,
               gen_client_sup,
               adhoc_plugin,
