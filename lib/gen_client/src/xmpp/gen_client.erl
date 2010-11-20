@@ -11,7 +11,7 @@
 -behaviour(gen_server).
 
 % API
--export([start/4, start/5, start/6, start/7, stop/1]).
+-export([start/2, start/4, start/5, start/6, start/7, stop/1]).
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 				 terminate/2, code_change/3]).
@@ -41,7 +41,7 @@
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
 % State
--record(client_state, {session, jid, handlers, options = [], args = []}).
+-record(client_state, {session, handlers, options = []}).
 
 % Defaults
 -define(DEFAULT_PRESENCE_MSG, " online.").
@@ -50,8 +50,7 @@
 -define(TEMPORARY_HANDLER, 1).
 -define(DEFAULT_PRIORITY, 2).
 -define(PLUGIN_KEY(P), atom_to_list(P) ++ "_plugin").
-
-
+-define(DEFAULT_LOGIN_TYPE, {sasl, "PLAIN"}).
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -64,27 +63,22 @@
 %% @end
 %%--------------------------------------------------------------------
 start(Account, Domain, Resource, Host, Port, Password, Options) ->
-	application:start(exmpp),
 	start(exmpp_jid:make(Account, Domain, Resource), Host, Port, Password, Options).
 
 start(Account, Domain, Host, Port, Password, Options) ->
 	start(Account, Domain, random, Host, Port, Password, Options).
 
+start(Jid, Host, Port, Password, Options) ->		
+	start([{jid, gen_client_utils:to_jid(Jid)}, {connection, {tcp, Host, Port}}, {auth, [{password, Password}, {login, ?DEFAULT_LOGIN_TYPE}]} | Options]).
 
-start(Jid, Host, Port, Password, Options) when is_list(Jid) ->
-	application:start(exmpp),	
-	start(gen_client_utils:to_jid(Jid), Host, Port, Password, Options);
-
-start(Jid, Host, Port, Password, Options) when ?IS_JID(Jid) ->		
-	{ok, Client} = gen_server:start_link(?MODULE, [Jid, Password, Host, Port, Options], []),
-	{ok, Client}.
-
-start(Jid, Host, Port, Password) when is_list(Jid) ->
-	application:start(exmpp),	
-	start(gen_client_utils:to_jid(Jid), Host, Port, Password, []);
-
-start(Jid, Host, Port, Password) when ?IS_JID(Jid) ->
+start(Jid, Host, Port, Password) ->
 	start(Jid, Host, Port, Password, []).
+
+start(Jid, Options) ->
+  start([{jid, gen_client_utils:to_jid(Jid)} | Options]).
+
+start(Options) ->
+	gen_server:start_link(?MODULE, Options, []).
 
 login(Client) ->
 	gen_server:call(Client, login).
@@ -167,16 +161,16 @@ stop(Client) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([JID, Password, Host, Port, Options]) ->
-	Domain = exmpp_jid:domain_as_list(JID),
-	init([JID, Password, Host, Port, Domain, Options]);
 
-init([JID, Password, Host, Port, Domain, Options] = _Args) ->
-	Session = create_session(JID, Password, Host, Port, Domain),
+%% init([JID, Password, Host, Port, Options]) ->
+%% 	Domain = exmpp_jid:domain_as_list(JID),
+%% 	init([JID, Password, Host, Port, Domain, Options]);
+
+init(Options) ->
+	Session = create_session(Options),
 	startup_script(Options),
-	{ok, #client_state{jid = JID,
+	{ok, #client_state{
 										 session = Session,
-										 args = [JID, Password, Host, Port, Domain],
 										 options = Options,
 										 handlers = orddict:new()	
 										}
@@ -196,8 +190,10 @@ init([JID, Password, Host, Port, Domain, Options] = _Args) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call(login, _From, #client_state{session = Session} = State) ->
-	Reply = login_internal(Session),
+handle_call(login, _From, #client_state{session = Session, options = Options} = State) ->
+  AuthParams = proplists:get_value(auth, Options),
+  LoginType = proplists:get_value(login, AuthParams, ?DEFAULT_LOGIN_TYPE), 
+  Reply = login_internal(Session, LoginType),
 	{reply, Reply, State};
 
 handle_call({add_handler, Handler, HandlerId, Priority},  _From, #client_state{handlers = Handlers} = State) ->
@@ -240,7 +236,7 @@ handle_cast({send_packet, Packet}, #client_state{session = Session} = State) ->
 	spawn(fun() -> exmpp_session:send_packet(Session, Packet) end),
 	{noreply, State};	
 
-handle_cast(stop, #client_state{session = Session, handlers = Handlers} = State) ->
+handle_cast(stop, #client_state{session = _Session, handlers = _Handlers} = State) ->
 	{stop, normal, State};
 
 handle_cast({set_debug, true}, #client_state{handlers = Handlers} = State) ->
@@ -292,9 +288,9 @@ handle_info({'EXIT', Process, Reason}, State) ->
 	{noreply, State};
 
 
-handle_info(reconnect, #client_state{options = Options, args = Args} = State) ->
+handle_info(reconnect, #client_state{options = Options} = State) ->
 	io:format("Reconnecting...~n"),
-	NewSession = erlang:apply(fun create_session/5, Args),
+	NewSession = erlang:apply(fun create_session/1, Options),
 	case lists:keysearch(module, 1, Options) of
 		{value, {module, Mod, ModArgs}} ->
 			Client = self(),
@@ -342,8 +338,8 @@ handle_info(Msg, _State) ->
 %% @spec terminate(Reason, State) -> void()
 %% @end
 %%--------------------------------------------------------------------
-terminate(Reason, #client_state{jid = Jid, session = Session, handlers = Handlers} = _State) ->
-	io:format("Terminating ~p with reason ~p~n", [Jid, Reason]),
+terminate(Reason, #client_state{session = Session, options = Options, handlers = Handlers} = _State) ->
+	io:format("Terminating ~p with reason ~p~n", [proplists:get_value(jid, Options), Reason]),
 	exmpp_session:stop(Session),
 	orddict:filter(fun(_Key, {_Handler, Terminator}) -> erlang:apply(Terminator, []), false end, Handlers),	
 	ok.
@@ -395,29 +391,75 @@ get_client_state(Client) ->
 
 get_client_jid(Client) ->
 	ClientState = get_client_state(Client),
-	ClientState#client_state.jid.
+	proplists:get_value(jid, ClientState#client_state.options).
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
-create_session(JID, Password, Host, Port, Domain) ->
-	%% Create a new session with basic (digest) authentication:
-	Session = exmpp_session:start(),
-	exmpp_session:auth_basic_digest(Session, JID, Password),
-	%% Connect in standard TCP:
-	_StreamId = exmpp_session:connect_TCP(Session, Host, Port, Domain),
-	exmpp_session:set_controlling_process(Session, self()),
+create_session(SessionParams) ->
+	Session = exmpp_session:start({1,0}),
+	JID = proplists:get_value(jid, SessionParams),
+ AuthParams = proplists:get_value(auth, SessionParams),
+ ConnectionParams = proplists:get_value(connection, SessionParams, tcp),
+ 
+	auth(Session, JID, AuthParams),
+	%% Connect :
+ io:format("Connecting with ~p~n", [ConnectionParams]),
+	exmpp_session:set_controlling_process(Session, self()), 
+	StreamId = connect(Session, JID, ConnectionParams),
+	io:format("stream id:~p~n", [StreamId]),
 	%% Link with exmpp session so we trap session going down...
 	erlang:link(Session),
 	Session.
 
-login_internal(Session) ->
-	try exmpp_session:login(Session)
-	catch
-		throw:T ->
-			T
-	end.
+auth(Session, JID, AuthParams) ->
+  Password = proplists:get_value(password, AuthParams, undefined),
+		Method = get_auth_method(AuthParams),
+  io:format("Authenticating ~p with ~p~n", [JID, Password]),
+  exmpp_session:auth(Session, JID, Password, Method).
+
+%% Connections
+%% These functions are wrappers of corresponding exmpp_session functions
+
+%% TCP
+connect(Session, JID, tcp) ->
+		Server = exmpp_jid:domain_as_list(JID),
+  exmpp_session:connect_TCP(Session, Server);
+connect(Session, _JID, {tcp, Server}) ->
+  exmpp_session:connect_TCP(Session, Server);
+connect(Session, _JID, {tcp, Server, Port}) ->
+  exmpp_session:connect_TCP(Session, Server, Port);
+connect(Session, _JID, {tcp, Server, Port, Options}) ->
+  exmpp_session:connect_TCP(Session, Server, Port, Options);
+
+%% BOSH
+connect(Session, JID, {bosh, URL}) ->
+ 		Server = exmpp_jid:domain_as_list(JID), 
+ connect(Session, JID, {bosh, URL, Server, []});
+connect(Session, _JID, {bosh, URL, Server}) ->
+ connect(Session, _JID, {bosh, URL, Server, []});
+connect(Session, _JID, {bosh, URL, Server, Options}) ->
+  exmpp_session:connect_BOSH(Session, URL, Server, Options);
+
+%% SSL
+connect(Session, JID, ssl) ->
+		Server = exmpp_jid:domain_as_list(JID),
+  exmpp_session:connect_SSL(Session, Server);
+connect(Session, _JID, {ssl, Server}) ->
+  exmpp_session:connect_SSL(Session, Server);
+connect(Session, _JID, {ssl, Server, Port}) ->
+  exmpp_session:connect_SSL(Session, Server, Port);
+connect(Session, _JID, {ssl, Server, Port, Options}) ->
+  exmpp_session:connect_SSL(Session, Server, Port, Options).
+
+%% This is a wrapper for exmpp_session:login/2.
+login_internal(Session, {basic, Method}) when is_atom(Method) ->
+	exmpp_session:login(Session, Method);
+login_internal(Session, {basic, Method}) when is_list(Method) ->
+	exmpp_session:login(Session, list_to_atom(Method));
+login_internal(Session, {sasl, Mechanism}) when is_list(Mechanism) ->
+	exmpp_session:login(Session, Mechanism).
 
 startup_script(Options) ->
 	Client = self(),
@@ -476,3 +518,12 @@ get_xml(Packet) ->
 
 log_error(Reason) ->
 	io:format("Error: ~p~n", [Reason]).
+
+get_auth_method(AuthParams) ->
+  L = proplists:get_value(login, AuthParams, ?DEFAULT_LOGIN_TYPE),
+  case L of
+    {basic, Method} ->
+      Method;
+    {sasl, _Mechanism} ->
+      password
+  end.

@@ -73,6 +73,9 @@ get_process_state(Pid) ->
 						not_supported
 		end.
 
+to_jid(JID) when ?IS_JID(JID) ->
+  JID;
+
 to_jid(JidStr) when is_list(JidStr) ->
 	JidRec = exmpp_jid:parse(JidStr),
 	case exmpp_jid:resource(JidRec) of
