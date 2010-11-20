@@ -14,6 +14,8 @@
 				 generate_random_string/1,
 				 get_process_state/1,
 				 to_jid/1,
+     get_xml/1,
+     get_xmlel/1,        
 				 any_to_binary/1,
 				 any_to_str/1,
 					eval_script/2,
@@ -205,4 +207,9 @@ hex([N | Ns], Res) ->
 	hex(Ns, [digit_to_xchar(N rem 16),
 					 digit_to_xchar(N div 16) | Res]).
 
+%% Get xmlel (as defined by exmpp) from the stanza
+get_xmlel(#received_packet{raw_packet = RawPacket}) ->
+	RawPacket.
 
+get_xml(Packet) ->
+	exmpp_xml:document_to_list(get_xmlel(Packet)).

@@ -28,9 +28,9 @@ test() ->
 	%% We need to convert it to string to comply with exmpp_client_disco calls 
 	Jid1Str = exmpp_jid:to_list(Jid1),
 	{ok, Info} = gen_client:send_sync_packet(Client2, exmpp_client_disco:info(Jid1Str), 10000),
-	io:format("Disco info from gen_client:~p~n", [gen_client:get_xml(Info)]),
+	io:format("Disco info from gen_client:~p~n", [gen_client_utils:get_xml(Info)]),
 	{ok, Items} = gen_client:send_sync_packet(Client2, exmpp_client_disco:items(Jid1Str), 10000),
-	io:format("Disco items from gen_client:~p~n", [gen_client:get_xml(Items)]),	
+	io:format("Disco items from gen_client:~p~n", [gen_client_utils:get_xml(Items)]),	
 	ok.
 
 test_adhoc() ->

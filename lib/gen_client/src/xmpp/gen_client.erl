@@ -30,9 +30,6 @@
 %% 
 -export([get_client_state/1, get_client_jid/1]).
 
-%% Helpers
--export([get_xmlel/1, get_xml/1]).	 
-
 -compile(export_all).
 
 -include_lib("exmpp/include/exmpp_client.hrl").
@@ -44,7 +41,7 @@
 -record(client_state, {session, handlers, options = []}).
 
 % Defaults
--define(DEFAULT_PRESENCE_MSG, " online.").
+-define(DEFAULT_PRESENCE_MSG(Jid), gen_client_utils:to_jid(Jid) ++ " is online.").
 -define(LOGGER_KEY, "logger_handler").
 -define(SYSTEM_HANDLER, 0).
 -define(TEMPORARY_HANDLER, 1).
@@ -114,7 +111,7 @@ send_sync_packet(Client, Packet, Trigger, Timeout) ->
 	R = receive 
 				{ok, Response, ResponseId} -> %% we only interested in a response to our Id, 
 					%% ignoring all others;
-					{ok, Response} %% return response and let calling module to deal with it.
+					{ok, Response} %% return response and let the calling module to deal with it.
 				after Timeout ->			
 					timeout
 			end,
@@ -483,7 +480,7 @@ startup_script(Options) ->
 									{true, Msg} ->
 										fun() -> PFun(Msg) end;
 									true ->
-										fun() -> PFun(?DEFAULT_PRESENCE_MSG) end
+										fun() -> PFun(?DEFAULT_PRESENCE_MSG(proplists:get_value(jid, Options))) end
 								end,
 	
 	Script = proplists:get_value(script, Options, undefined),
@@ -509,13 +506,6 @@ generateHandlerId(Handler) ->
 
 %% Helpers
 %%
-%% Get xmlel (as defined by exmpp) from the stanza
-get_xmlel(#received_packet{raw_packet = RawPacket}) ->
-	RawPacket.
-
-get_xml(Packet) ->
-	exmpp_xml:document_to_list(get_xmlel(Packet)).
-
 log_error(Reason) ->
 	io:format("Error: ~p~n", [Reason]).
 
