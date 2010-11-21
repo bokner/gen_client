@@ -52,13 +52,40 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Starts the server
+%% @spec
+%% options() = [option()]
+%% option() = {debug, boolean()} | reconnect() | connection() | auth() | {log_in, boolean()} | presence()
+%% reconnect() = {reconnect, reconnect_value()} 
+%% reconnect_value() = false | {true, timeout()}
+%% timeout() = integer()
+%% auth() = {auth, [auth_param()]}
+%% auth_param() = {password, string()} | {basic, legacy_method()} | {sasl, sasl_mechanism()}
+%% legacy_method() = password | digest
+%% sasl_mechanism() = "PLAIN" | "ANONYMOUS" | "DIGEST-MD5"
+%% connection() = tcp_connection() | bosh_connection() | ssl_connection()
+%% tcp_connection() = tcp | {tcp, server()} | {tcp, server(), port()} | {tcp, server(), port(), tcp_options()}
+%% ssl_connection() = ssl | {ssl, server()} | {ssl, server(), port()} | {ssl, server(), port(), tcp_options()}
+%% bosh_connection() = {bosh, url()}
+%% server() = string()
+%% port() = integer()
+%% url() = string()
+
+%% @spec (Account, Domain, Resource, Host, Port, Password, Options) -> Reply
+%%     Account = string()
+%%					Domain = string()
+%%					Resource = string()
+%%					Host = string()
+%%					Port = integer()
+%%					Password = string()
+%%					Options = options()
 %%
-%% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
-%% @end
-%%--------------------------------------------------------------------
+%%			Reply = {ok, Client}
+%%			Client = pid()
+%%
+%% @doc Start XMPP client session.
+%% Returns {ok, Client};
+%% Client is a reference that is used in consequent API calls
+
 start(Account, Domain, Resource, Host, Port, Password, Options) ->
 	start(exmpp_jid:make(Account, Domain, Resource), Host, Port, Password, Options).
 
@@ -433,11 +460,7 @@ connect(Session, _JID, {tcp, Server, Port, Options}) ->
 %% BOSH
 connect(Session, JID, {bosh, URL}) ->
  		Server = exmpp_jid:domain_as_list(JID), 
- connect(Session, JID, {bosh, URL, Server, []});
-connect(Session, _JID, {bosh, URL, Server}) ->
- connect(Session, _JID, {bosh, URL, Server, []});
-connect(Session, _JID, {bosh, URL, Server, Options}) ->
-  exmpp_session:connect_BOSH(Session, URL, Server, Options);
+  exmpp_session:connect_BOSH(Session, URL, Server, []);
 
 %% SSL
 connect(Session, JID, ssl) ->
