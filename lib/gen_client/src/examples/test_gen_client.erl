@@ -16,6 +16,7 @@
 %% API Functions
 %%
 test() ->
+ exmpp:start(), 
 	{ok, Client1} = gen_client:start("gen_client@jabber.ru", "jabber.ru", 5222, "test", 
 																	 [{debug, true}, {presence, {true, "I'm online."}}, {reconnect, 15000}]),	
 	gen_client:add_plugin(Client1, disco_plugin, [test_disco, []]),

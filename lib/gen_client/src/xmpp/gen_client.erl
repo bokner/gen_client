@@ -101,13 +101,11 @@ start(Jid, Host, Port, Password) ->
 start(Jid, Options) ->
   start([{jid, gen_client_utils:to_jid(Jid)} | Options]).
 
-start(Options) ->
+start(Options) ->    
 	gen_server:start_link(?MODULE, Options, []).
 
 login(Client) ->
 	gen_server:call(Client, login).
-
-
 
 %% Send packet asynchronously
 send_packet(Client, Packet) ->
