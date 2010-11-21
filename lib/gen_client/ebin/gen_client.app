@@ -2,7 +2,7 @@
 %% application.
 {application, gen_client, 
   [{description, "Generic XMPP client library"},
-   {vsn, "0.9.15"},
+   {vsn, "0.9.16"},
    {modules, [gen_client_app,
               gen_client_sup,
               adhoc_plugin,
@@ -22,7 +22,7 @@
               tidy_bot
               ]},
    {registered,[gen_client_sup]},
-   {applications, [kernel, stdlib]},
+   {applications, [kernel, stdlib, exmpp]},
    {mod, {gen_client_app,[]}},
    {start_phases, []}]}.
 
