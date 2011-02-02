@@ -1,4 +1,4 @@
-%% This is the application resource file (.app file) for the gen_client,
+%% This is the application resource file (.app file) for the gen_client
 %% application.
 {application, gen_client, 
   [{description, "Generic XMPP client library"},
