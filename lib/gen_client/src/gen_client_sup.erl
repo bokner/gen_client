@@ -48,20 +48,12 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-    RestartStrategy = one_for_one,
-    MaxRestarts = 1000,
-    MaxSecondsBetweenRestarts = 3600,
 
-    SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
+	StartMod = gen_client,
+	StartFunc = {gen_server, start_link, [StartMod]},
+	ChildSpec = {StartMod, StartFunc, temporary, 4000, worker, [StartMod]},
+	{ok, {{simple_one_for_one, 0, 1}, [ChildSpec]}}.  
 
-%%     Restart = permanent,
-%%     Shutdown = 2000,
-%%     Type = worker,
-%% 
-%%     AChild = {'AName', {'AModule', start_link, []},
-%%               Restart, Shutdown, Type, ['AModule']},
-
-    {ok, {SupFlags, []}}.
 
 %%%===================================================================
 %%% Internal functions

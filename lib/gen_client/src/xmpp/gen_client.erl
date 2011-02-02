@@ -11,7 +11,7 @@
 -behaviour(gen_server).
 
 % API
--export([start/2, start/4, start/5, start/6, start/7, stop/1]).
+-export([start/2, start/4, start/5, start/6, start/7, stop/1, reconnect/1]).
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -37,17 +37,19 @@
 -include_lib("exmpp/include/exmpp_xml.hrl").
 -include_lib("exmpp/include/exmpp_xmpp.hrl").
 
+
 % State
 -record(client_state, {session, handlers, options = []}).
 
 % Defaults
--define(DEFAULT_PRESENCE_MSG(Jid), gen_client_utils:to_jid(Jid) ++ " is online.").
 -define(LOGGER_KEY, "logger_handler").
 -define(SYSTEM_HANDLER, 0).
 -define(TEMPORARY_HANDLER, 1).
 -define(DEFAULT_PRIORITY, 2).
 -define(PLUGIN_KEY(P), atom_to_list(P) ++ "_plugin").
 -define(DEFAULT_LOGIN_TYPE, {sasl, "PLAIN"}).
+-define(DEFAULT_PRESENCE_MSG(Jid), gen_client_utils:to_jid(Jid) ++ " is online.").
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -101,11 +103,17 @@ start(Jid, Host, Port, Password) ->
 start(Jid, Options) ->
   start([{jid, gen_client_utils:to_jid(Jid)} | Options]).
 
-start(Options) ->    
-  gen_server:start_link(?MODULE, Options, []).
+start(Options) ->
+  application:start(exmpp),
+  application:start(gen_client),
+  supervisor:start_child(gen_client_sup, [Options, [{debug, [trace]}]]).
+  %%gen_server:start_link(?MODULE, Options, []).
 
 login(Client) ->
   gen_server:call(Client, login).
+
+reconnect(Client) ->
+		gen_server:cast(Client, reconnect).
 
 %% Send packet asynchronously
 send_packet(Client, Packet) ->
@@ -189,14 +197,14 @@ stop(Client) ->
 %% 	init([JID, Password, Host, Port, Domain, Options]);
 
 init(Options) ->
-  Session = create_session(Options),
-  startup_script(Options),
+  process_flag(trap_exit, true),
+  io:format("Starting gen_client with options:~n~p~n", [Options]),
+	 Session = create_session(Options),
   {ok, #client_state{
-                     session = Session,
                      options = Options,
+																					session = Session,
                      handlers = orddict:new()	
-                    }
-  }.
+                    }, 0}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -215,7 +223,7 @@ init(Options) ->
 handle_call(login, _From, #client_state{session = Session, options = Options} = State) ->
   AuthParams = proplists:get_value(auth, Options),
   LoginType = proplists:get_value(login, AuthParams, ?DEFAULT_LOGIN_TYPE), 
-  LoginResult = login_internal(Session, LoginType),
+  LoginResult = (catch(login_internal(Session, LoginType))),
   {Reply, NewState} = case LoginResult of
                         {ok, Jid} ->
                           NewOptions = [{jid, Jid} | tl(Options)],
@@ -265,6 +273,9 @@ handle_cast({send_packet, Packet}, #client_state{session = Session} = State) ->
   spawn(fun() -> exmpp_session:send_packet(Session, Packet) end),
   {noreply, State};	
 
+handle_cast(reconnect, #client_state{session = Session} = State) ->
+		exmpp_session:stop(Session),
+		{noreply, State};
 handle_cast(stop, #client_state{session = _Session, handlers = _Handlers} = State) ->
   {stop, normal, State};
 
@@ -297,29 +308,35 @@ handle_cast(_Request, State) ->
 %% This is called immediately after init() is finished.
 handle_info(timeout, State) ->
   process_flag(trap_exit, true),
+  
   {noreply, State};
 
 %% Handle EXIT from Session
-handle_info({'EXIT', Session, _Reason}, #client_state{session = Session, options = Options} = State) ->
-  io:format("Session closed:~p~n", [_Reason]),
-  %% Is "reconnect" option specified?
+handle_info({'DOWN', _MonitorRef, process, Process, Info}, #client_state{session = Session, options = Options} = State) ->
+  io:format("Process ~p dies:~p~n", [Process, Info]),
+  case Session == undefined orelse Process == Session of
+    true ->
   case lists:keysearch(reconnect, 1, Options) of
-    {value, {reconnect, Timeout}} ->
-      catch(exmpp_session:stop(Session)),
+    {value, {reconnect, Timeout}}  ->
       timer:send_after(Timeout, reconnect),
       {noreply, State};
     false ->
       {stop, normal, State}
   end;
+    false ->
+      {noreply, State}
+  end;
+
 
 handle_info({'EXIT', Process, Reason}, State) ->
   io:format("Process ~p ended with ~p.~n", [Process, Reason]),
   {noreply, State};
 
 
-handle_info(reconnect, #client_state{options = Options} = State) ->
+handle_info(reconnect, #client_state{session = Session, options = Options} = State) ->
   io:format("Reconnecting...~n"),
-  NewSession = erlang:apply(fun create_session/1, Options),
+  catch(exmpp_session:stop(Session)),
+  NewSession = create_session(Options),
   case lists:keysearch(module, 1, Options) of
     {value, {module, Mod, ModArgs}} ->
       Client = self(),
@@ -332,7 +349,7 @@ handle_info(reconnect, #client_state{options = Options} = State) ->
 
 %% All received packets will trigger handle_info calls (because we have assigned the process to be a controlling process of session).
 handle_info(Received, 
-            #client_state{handlers = Handlers} = State) ->
+            #client_state{handlers = Handlers} = State) when is_record(Received, received_packet) ->
   
   Client = self(),
   spawn(fun() ->
@@ -351,8 +368,9 @@ handle_info(Received,
              end end),
   {noreply, State};
 
-handle_info(Msg, _State) ->
-  io:format("Unexpected message:~p~n", [Msg]).
+handle_info(Msg, State) ->
+  io:format("Unexpected message:~p~n", [Msg]),
+		{noreply, State}.
 
 
 
@@ -425,9 +443,12 @@ get_client_jid(Client) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
+create_session_sup(SessionParams) ->
+ supervisor:start_link(?MODULE, SessionParams).
+  
 create_session(SessionParams) ->
   Session = exmpp_session:start({1,0}),
+		erlang:monitor(process, Session),  
   JID = proplists:get_value(jid, SessionParams),
   AuthParams = proplists:get_value(auth, SessionParams),
   ConnectionParams = proplists:get_value(connection, SessionParams, tcp),
@@ -435,12 +456,64 @@ create_session(SessionParams) ->
   auth(Session, JID, AuthParams),
   %% Connect :
   io:format("Connecting with ~p~n", [ConnectionParams]),
+  
   exmpp_session:set_controlling_process(Session, self()), 
-  StreamId = connect(Session, JID, ConnectionParams),
+  try 
+		StreamId = connect(Session, JID, ConnectionParams),
   io:format("stream id:~p~n", [StreamId]),
-  %% Link with exmpp session so we trap session going down...
-  erlang:link(Session),
-  Session.
+  startup_script(SessionParams), 
+  					Session
+		catch
+				_Error:Reason ->
+						io:format("Failure to connect:~p~n", [Reason]),
+						exmpp_session:stop(Session),
+						undefined
+	end.
+
+
+startup_script(Options) ->
+  Client = self(),
+  VoidFun = fun() -> void end,
+  IsDebug = proplists:get_value(debug, Options, false),
+  DebugFun = fun() -> gen_client:set_debug(Client, IsDebug) end,
+  IsLogin = proplists:get_value(log_in, Options, true),
+  %% The login gets called by default
+  LoginFun = case IsLogin of
+               true ->
+                 fun() -> gen_client:login(Client) end;
+               false ->
+                 VoidFun
+             end,
+  IsPresence = proplists:get_value(presence, Options, true),
+  PFun = 
+    fun(Msg) -> gen_client:send_packet(Client, stanza:available(Msg)) end,
+  PresenceFun = case IsPresence of
+                  false ->
+                    VoidFun;
+                  {true, Msg} ->
+                    fun() -> PFun(Msg) end;
+                  true ->
+                    fun() -> PFun(?DEFAULT_PRESENCE_MSG(proplists:get_value(jid, Options))) end
+                end,
+  
+  Script = proplists:get_value(script, Options, undefined),
+  ScriptFun = case Script of
+                undefined ->
+                  VoidFun;
+                _ ->
+                  %% Script is a function that takes a single Client parameter
+                  fun() -> Script(Client) end
+              end,	
+  spawn_monitor(fun() -> 
+                         DebugFun(), case LoginFun() of
+                                    ok ->
+                                      PresenceFun(), ScriptFun();
+                                    void ->
+                                      ScriptFun()
+                                  end
+             end).
+
+
 
 auth(Session, JID, AuthParams) ->
   Password = proplists:get_value(password, AuthParams, undefined),
@@ -478,54 +551,8 @@ connect(Session, _JID, {ssl, Server, Port}) ->
 connect(Session, _JID, {ssl, Server, Port, Options}) ->
   exmpp_session:connect_SSL(Session, Server, Port, Options).
 
-%% This is a wrapper for exmpp_session:login/2.
-login_internal(Session, {basic, Method}) when is_atom(Method) ->
-  exmpp_session:login(Session, Method);
-login_internal(Session, {basic, Method}) when is_list(Method) ->
-  exmpp_session:login(Session, list_to_atom(Method));
-login_internal(Session, {sasl, Mechanism}) when is_list(Mechanism) ->
-  exmpp_session:login(Session, Mechanism).
 
-startup_script(Options) ->
-  Client = self(),
-  VoidFun = fun() -> void end,
-  IsDebug = proplists:get_value(debug, Options, false),
-  DebugFun = fun() -> gen_client:set_debug(Client, IsDebug) end,
-  IsLogin = proplists:get_value(log_in, Options, true),
-  %% The login gets called by default
-  LoginFun = case IsLogin of
-               true ->
-                 fun() -> gen_client:login(Client) end;
-               false ->
-                 VoidFun
-             end,
-  IsPresence = proplists:get_value(presence, Options, true),
-  PFun = 
-    fun(Msg) -> gen_client:send_packet(Client, stanza:available(Msg)) end,
-  PresenceFun = case IsPresence of
-                  false ->
-                    VoidFun;
-                  {true, Msg} ->
-                    fun() -> PFun(Msg) end;
-                  true ->
-                    fun() -> PFun(?DEFAULT_PRESENCE_MSG(proplists:get_value(jid, Options))) end
-                end,
-  
-  Script = proplists:get_value(script, Options, undefined),
-  ScriptFun = case Script of
-                undefined ->
-                  VoidFun;
-                _ ->
-                  %% Script is a function that takes a single Client parameter
-                  fun() -> Script(Client) end
-              end,	
-  spawn_link(fun() -> DebugFun(), case LoginFun() of
-                                    ok ->
-                                      PresenceFun(), ScriptFun();
-                                    void ->
-                                      ScriptFun()
-                                  end
-             end).
+
 
 
 %% Add/remove logging
@@ -543,6 +570,14 @@ generateHandlerId(Handler) ->
 log_error(Reason) ->
   io:format("Error: ~p~n", [Reason]).
 
+%% This is a wrapper for exmpp_session:login/2.
+login_internal(Session, {basic, Method}) when is_atom(Method) ->
+  exmpp_session:login(Session, Method);
+login_internal(Session, {basic, Method}) when is_list(Method) ->
+  exmpp_session:login(Session, list_to_atom(Method));
+login_internal(Session, {sasl, Mechanism}) when is_list(Mechanism) ->
+  exmpp_session:login(Session, Mechanism).
+
 get_auth_method(AuthParams) ->
   L = proplists:get_value(login, AuthParams, ?DEFAULT_LOGIN_TYPE),
   case L of
@@ -551,3 +586,4 @@ get_auth_method(AuthParams) ->
     {sasl, _Mechanism} ->
       password
   end.
+
