@@ -106,7 +106,7 @@ start(Jid, Options) ->
 start(Options) ->
   application:start(exmpp),
   application:start(gen_client),
-  supervisor:start_child(gen_client_sup, [Options, [{debug, [trace]}]]).
+  supervisor:start_child(gen_client_sup, [Options, []]).
   %%gen_server:start_link(?MODULE, Options, []).
 
 login(Client) ->
