@@ -1,9 +1,9 @@
-#Thu Nov 18 11:54:22 EST 2010
-backend_version=R13B
+#Fri Dec 09 09:34:10 EST 2011
+backend_version=R14B
 eclipse.preferences.version=1
 external_includes=
 external_modules=
-include_dirs=lib/gen_client/include;
+include_dirs=lib/gen_client/include;include
 output_dir=ebin
-source_dirs=lib/gen_client/src/xmpp/commands;lib/gen_client/src/xmpp;lib/gen_client/src/utils;lib/gen_client/src/examples;lib/gen_client/src;
+source_dirs=lib/gen_client/src/examples;lib/gen_client/src;lib/gen_client/src/utils;lib/gen_client/src/xmpp;lib/gen_client/src/xmpp/commands
 use_pathz=false

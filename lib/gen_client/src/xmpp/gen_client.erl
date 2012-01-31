@@ -39,7 +39,7 @@
 
 
 % State
--record(client_state, {session, handlers, options = []}).
+-record(client_state, {session, handlers, options = [], logged_in = false}).
 
 % Defaults
 -define(LOGGER_KEY, "logger_handler").
@@ -227,9 +227,9 @@ handle_call(login, _From, #client_state{session = Session, options = Options} = 
   {Reply, NewState} = case LoginResult of
                         {ok, Jid} ->
                           NewOptions = [{jid, Jid} | tl(Options)],
-                          {ok, State#client_state{options = NewOptions}};
+                          {ok, State#client_state{options = NewOptions, logged_in = true}};
                         Other ->
-                          {Other, State}
+                          {Other, State#client_state{logged_in = false}}
                       end,
   {reply, Reply, NewState};
 
