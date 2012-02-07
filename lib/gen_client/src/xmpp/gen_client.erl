@@ -156,11 +156,11 @@ send_sync_packet(Client, Packet, Trigger, Timeout) ->
 %% We need to know or create original id first.
 %%
 send_sync_packet(Client, Packet, Timeout) ->
-  Id = exmpp_xml:get_attribute(Packet, id, none),
+  Id = exmpp_xml:get_attribute(Packet, <<"id">>, none),
   {P, PacketId} = case Id of
                     none ->
                       NewId = exmpp_utils:random_id("session."++ lists:flatten(io_lib:format("~p", [self()]))),
-                      NewPacket = exmpp_xml:set_attribute(Packet, id, NewId),
+                      NewPacket = exmpp_xml:set_attribute(Packet, <<"id">>, NewId),
                       {NewPacket, NewId};
                     _Id ->
                       {Packet, Id}	
