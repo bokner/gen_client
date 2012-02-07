@@ -1,6 +1,6 @@
 Prerequisites: 
 	erlang R12B-5 or higher;
-	exmpp 0.9.5
+	exmpp 0.9.9
 	
 To build from source, cd to directory where you checkout/untar/unzip gen_client and do:
 
